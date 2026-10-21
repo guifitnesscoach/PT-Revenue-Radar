@@ -11,3 +11,10 @@ Changes in v17:
 
 ## v18 fix
 Revenue opportunity is calculated per remaining session using the package total value divided by the package session count. Example: 10-session pack £950 with 7 remaining = £665 revenue opportunity.
+
+
+## Prospect contact history
+- Email button opens the prospect email directly.
+- Log contact records channel, date/time and notes without overwriting previous contacts.
+- Prospect cards show contact count and latest contact, with expandable history.
+- Contact history is stored in Supabase table `prospect_contacts`.

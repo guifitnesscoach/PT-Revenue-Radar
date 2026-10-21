@@ -9,6 +9,7 @@ let clients = [];
 let sessions = [];
 let packages = [];
 let prospects = [];
+let prospectContacts = [];
 let activeClientId = null;
 let activePackageId = null;
 let activeProspectId = null;
@@ -421,6 +422,12 @@ function renderClients() {
   document.querySelectorAll("[data-client-tab]").forEach(btn => btn.classList.toggle("active", btn.dataset.clientTab === clientTab));
 }
 
+function contactsForProspect(prospectId) {
+  return prospectContacts
+    .filter(c => c.prospect_id === prospectId)
+    .sort((a,b) => new Date(b.contacted_at) - new Date(a.contacted_at));
+}
+
 function renderProspects() {
   const wrap = $("prospectList");
   if (!wrap) return;
@@ -430,11 +437,15 @@ function renderProspects() {
     return;
   }
   wrap.innerHTML = rows.map(pr => {
-    const contacted = !!pr.contacted_at;
-    const when = contacted ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet";
+    const history = contactsForProspect(pr.id);
+    const latest = history[0];
+    const contacted = history.length > 0 || !!pr.contacted_at;
+    const when = latest ? new Date(latest.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : (pr.contacted_at ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet");
+    const channel = latest?.channel || "Previous contact";
     return `<div class="prospect-row">
-      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""} · ${esc(pr.source || "Fitness Manager")}</div><div class="meta">${contacted ? `Contacted ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
-      <div class="actions prospect-actions"><button class="ghost small" onclick="toggleProspectContact('${pr.id}')">${contacted ? "Update contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
+      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""} · ${esc(pr.source || "Fitness Manager")}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
+      <div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
+      ${history.length ? `<details class="prospect-history"><summary>Contact history (${history.length})</summary><div class="history-list">${history.map(h => `<div class="history-item"><div><b>${esc(h.channel)}</b> · ${esc(new Date(h.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}))}</div>${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}</div>`).join("")}</div></details>` : ""}
     </div>`;
   }).join("");
 }
@@ -465,10 +476,17 @@ async function load() {
   sessions = [];
   packages = [];
   prospects = [];
+  prospectContacts = [];
 
   const prospectResult = await sb.from("prospects").select("*").is("converted_at", null).order("created_at", { ascending: false });
   if (!prospectResult.error) prospects = prospectResult.data || [];
   else console.error(prospectResult.error);
+  const prospectIds = prospects.map(p => p.id);
+  if (prospectIds.length) {
+    const contactResult = await sb.from("prospect_contacts").select("*").in("prospect_id", prospectIds).order("contacted_at", { ascending: false });
+    if (!contactResult.error) prospectContacts = contactResult.data || [];
+    else console.error(contactResult.error);
+  }
 
   if (clientIds.length) {
     const [sessionResult, packageResult] = await Promise.all([
@@ -765,18 +783,66 @@ function parseCsv(text){
 
 function exportProspectsCsv(){
   const rows=prospects.filter(p=>!p.converted_at);
-  const header=["Name","Email","Phone","Source","Contacted","Contacted At"];
-  const csv=[header,...rows.map(p=>[p.name,p.email,p.phone||"",p.source||"Fitness Manager",p.contacted_at?"Yes":"No",p.contacted_at?new Date(p.contacted_at).toLocaleString("en-GB"):""])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const header=["Name","Email","Phone","Source","Contact Count","Last Contact Channel","Last Contacted At"];
+  const csv=[header,...rows.map(p=>{
+    const history=contactsForProspect(p.id);
+    const latest=history[0];
+    return [p.name,p.email,p.phone||"",p.source||"Fitness Manager",history.length,latest?.channel||"",latest?.contacted_at?new Date(latest.contacted_at).toLocaleString("en-GB"):(p.contacted_at?new Date(p.contacted_at).toLocaleString("en-GB"):"")];
+  })].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`prospect-clients-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-window.toggleProspectContact=async id=>{
-  const p=prospects.find(x=>x.id===id); if(!p)return;
-  const next=new Date().toISOString();
-  const {error}=await sb.from("prospects").update({contacted_at:next}).eq("id",id);
-  if(error){alert(error.message);return;} await load(); showPage("prospects");
+window.openProspectContact = id => {
+  const p = prospects.find(x => x.id === id);
+  if (!p) return;
+  activeProspectId = id;
+  $("prospectContactTitle").textContent = p.name || "Prospect";
+  $("prospectContactForm").reset();
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  $("prospectContactDate").value = local.toISOString().slice(0, 10);
+  $("prospectContactTime").value = local.toISOString().slice(11, 16);
+  $("prospectContactMsg").textContent = "";
+  $("prospectContactDialog").showModal();
 };
+
+$("closeProspectContactDialog")?.addEventListener("click", () => {
+  activeProspectId = null;
+  $("prospectContactDialog")?.close();
+});
+
+$("prospectContactForm")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!activeProspectId) return;
+  const p = prospects.find(x => x.id === activeProspectId);
+  if (!p) return;
+  const msg = $("prospectContactMsg");
+  msg.textContent = "Saving...";
+  const {data:{user}} = await sb.auth.getUser();
+  const dateValue = $("prospectContactDate").value;
+  const timeValue = $("prospectContactTime").value;
+  if (!dateValue || !timeValue) { msg.textContent = "Please choose a date and time."; return; }
+  const contactedAt = new Date(`${dateValue}T${timeValue}:00`);
+  if (Number.isNaN(contactedAt.getTime())) { msg.textContent = "Please choose a valid date and time."; return; }
+  const payload = {
+    user_id: user.id,
+    prospect_id: p.id,
+    contacted_at: contactedAt.toISOString(),
+    channel: $("prospectContactChannel").value,
+    notes: $("prospectContactNotes").value.trim() || null
+  };
+  const {error} = await sb.from("prospect_contacts").insert(payload);
+  if (error) { msg.textContent = error.message; return; }
+  const {error:updateError} = await sb.from("prospects").update({contacted_at: contactedAt.toISOString()}).eq("id", p.id);
+  if (updateError) { console.error(updateError); }
+  $("prospectContactDialog").close();
+  activeProspectId = null;
+  await load();
+  showPage("prospects");
+});
+
+window.toggleProspectContact = window.openProspectContact;
 
 window.deleteProspect=async id=>{
   const p=prospects.find(x=>x.id===id); if(!p)return;
