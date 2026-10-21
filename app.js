@@ -25,6 +25,25 @@ const daysAgo = date => date
 const sessionsForClient = clientId =>
   sessions.filter(s => s.client_id === clientId);
 
+
+const PACKAGE_OPTIONS = [
+  { value: "1_session_pack", label: "1 session pack", sessions: 1, monthly: false },
+  { value: "10_sessions_pack", label: "10 sessions pack", sessions: 10, monthly: false },
+  { value: "20_sessions_pack", label: "20 sessions pack", sessions: 20, monthly: false },
+  { value: "4_dd", label: "4 sessions by Direct Debit", sessions: 4, monthly: true },
+  { value: "8_dd", label: "8 sessions by Direct Debit", sessions: 8, monthly: true },
+  { value: "12_dd", label: "12 sessions by Direct Debit", sessions: 12, monthly: true }
+];
+
+const packageInfo = value => PACKAGE_OPTIONS.find(p => p.value === value) || null;
+
+const remainingSessions = c => {
+  const p = packageInfo(c.package);
+  const total = Number(c.package_sessions || 0);
+  const used = p?.monthly ? sessionsThisMonth(c.id) : sessionsForClient(c.id).length;
+  return Math.max(0, total - used);
+};
+
 const sessionsThisMonth = clientId => {
   const now = new Date();
   return sessionsForClient(clientId).filter(s => {
@@ -46,14 +65,16 @@ function analyse(c) {
   const lastSessionDate = latestSession?.session_date || null;
   const daysSinceSession = daysAgo(lastSessionDate);
 
-  if (c.lead) {
+  const leadSource = c.lead_source || (c.lead ? "Lead" : "");
+  if (leadSource) {
     score += 4;
-    reasons.push("Lead needs follow-up");
+    reasons.push(`Lead: ${leadSource}`);
   }
 
-  if (Number(c.sessions_remaining) <= 2 && !c.lead) {
+  const remaining = remainingSessions(c);
+  if (remaining <= 2 && Number(c.package_sessions || 0) > 0 && !leadSource) {
     score += 3;
-    reasons.push("Package nearly finished");
+    reasons.push(`Package nearly finished (${remaining} remaining)`);
   }
 
   if (!lastSessionDate || daysSinceSession >= 14) {
@@ -62,9 +83,10 @@ function analyse(c) {
   }
 
   const monthly = sessionsThisMonth(c.id);
-  if (Number(c.target_frequency) >= 4 && monthly < Number(c.target_frequency) && daysSinceSession >= 7) {
+  const p = packageInfo(c.package);
+  if (p?.monthly && monthly < p.sessions && daysSinceSession >= 7) {
     score += 2;
-    reasons.push(`Frequency below target (${monthly}/${c.target_frequency} this month)`);
+    reasons.push(`Frequency below target (${monthly}/${p.sessions} this month)`);
   }
 
   return {
@@ -72,6 +94,7 @@ function analyse(c) {
     reasons,
     opp: Number(c.package_value || 0),
     monthly,
+    remaining,
     latestSession: lastSessionDate,
     daysSinceSession
   };
@@ -123,9 +146,10 @@ function card(c, x) {
         </div>
         <div class="meta">
           ${c.phone ? esc(c.phone) : "No phone"} ·
-          ${money(c.package_value)} package ·
-          ${c.sessions_remaining || 0} sessions remaining ·
-          ${x.monthly} this month
+          ${esc(packageInfo(c.package)?.label || c.package || "No package")} ·
+          ${money(c.package_value)} ·
+          ${x.remaining} sessions remaining ·
+          ${x.monthly} this month${c.lead_source ? ` · ${esc(c.lead_source)}` : ""}
         </div>
         ${x.reasons.length ? `<div class="why"><b>Why:</b> ${esc(x.reasons.join(" · "))}</div>` : ""}
       </div>
@@ -266,9 +290,12 @@ $("clientForm").onsubmit = async e => {
     name: $("cName").value.trim(),
     phone: $("cPhone").value.trim() || null,
     package_value: Number($("cValue").value || 0),
-    target_frequency: Number($("cFreq").value || 1),
-    sessions_remaining: Number($("cRemaining").value || 0),
-    lead: $("cLead").value === "true",
+    package: $("cPackage").value,
+    package_sessions: Number($("cPackage").selectedOptions[0]?.dataset.sessions || 0),
+    target_frequency: Number($("cPackage").selectedOptions[0]?.dataset.monthly === "true" ? $("cPackage").selectedOptions[0]?.dataset.sessions : 0),
+    sessions_remaining: Number($("cPackage").selectedOptions[0]?.dataset.sessions || 0),
+    lead_source: $("cLeadSource").value || null,
+    lead: Boolean($("cLeadSource").value),
     notes: $("cNotes").value.trim() || null
   };
 
@@ -308,9 +335,10 @@ window.detail = id => {
 
     <p><b>Revenue opportunity:</b> ${money(x.opp)}</p>
     <p><b>Why:</b> ${esc(x.reasons.join(" · ") || "No urgent issue detected.")}</p>
-    <p><b>Target:</b> ${c.target_frequency} sessions/month</p>
+    <p><b>Package:</b> ${esc(packageInfo(c.package)?.label || c.package || "—")}</p>
     <p><b>This month:</b> ${x.monthly} sessions</p>
-    <p><b>Remaining:</b> ${c.sessions_remaining}</p>
+    <p><b>Sessions remaining:</b> ${x.remaining}</p>
+    <p><b>Lead source:</b> ${esc(c.lead_source || (c.lead ? "Lead" : "—"))}</p>
     <p><b>Notes:</b> ${esc(c.notes || "—")}</p>
 
     <div style="margin:18px 0">
@@ -369,17 +397,6 @@ window.logSession = async clientId => {
   if (sessionError) {
     if (msg) msg.textContent = sessionError.message;
     return;
-  }
-
-  const client = clients.find(c => c.id === clientId);
-
-  if (client && Number(client.sessions_remaining) > 0) {
-    await sb
-      .from("clients")
-      .update({
-        sessions_remaining: Math.max(0, Number(client.sessions_remaining) - 1)
-      })
-      .eq("id", clientId);
   }
 
   await load();
