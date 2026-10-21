@@ -3,4 +3,12 @@
 <div id="appView" class="hide"><header><div><div class="eyebrow">PT REVENUE RADAR</div><h1>Today's revenue opportunities</h1></div><div class="top"><span id="userEmail"></span><button id="logoutBtn" class="ghost">Log out</button></div></header><main><section id="stats" class="stats"></section><section class="panel"><div class="head"><div><div class="eyebrow">PRIORITIES</div><h2>Who needs your attention?</h2></div><button id="addClientBtn" class="primary">+ Add client</button></div><div id="priorityList"></div></section><section class="panel"><div class="head"><div><div class="eyebrow">CLIENT BOOK</div><h2>All clients</h2></div><input id="search" class="search" placeholder="Search clients..."></div><div id="clientList"></div></section></main></div>
 <dialog id="clientDialog"><form method="dialog" id="clientForm" class="dialog"><div class="head"><h2>Add client</h2><button type="button" id="closeDialog" class="icon">×</button></div><label>Name<input id="cName" required></label><label>Phone<input id="cPhone" placeholder="+44..."></label><div class="grid"><label>Package value (£)<input id="cValue" type="number" min="0" value="0"></label><label>Target sessions/month<input id="cFreq" type="number" min="1" value="4"></label></div><div class="grid"><label>Sessions remaining<input id="cRemaining" type="number" min="0" value="0"></label><label>Lead?<select id="cLead"><option value="false">No</option><option value="true">Yes</option></select></label></div><label>Notes<textarea id="cNotes" rows="3"></textarea></label><div id="clientMsg" class="msg"></div><button class="primary wide">Save client</button></form></dialog>
 <dialog id="detailDialog"><div id="detailContent" class="dialog"></div></dialog>
-<script src="config.js"></script><script src="app.js"></script></body></html>
+<script src="config.js?v=2"></script>
+<script src="app.js?v=2"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => registration.unregister());
+  });
+}
+</script></body></html>
