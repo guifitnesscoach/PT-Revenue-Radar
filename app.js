@@ -477,7 +477,34 @@ async function load() {
 }
 
 function showAuth() { $("authView").classList.remove("hide"); $("appView").classList.add("hide"); }
-function showApp(s) { $("authView").classList.add("hide"); $("appView").classList.remove("hide"); $("userEmail").textContent = s.user.email || ""; showPage("dashboard"); load(); }
+
+async function setAccountBrand(user) {
+  let name = user?.user_metadata?.full_name?.trim() || "";
+  if (!name && sb && user?.id) {
+    try {
+      const { data } = await sb.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      name = data?.full_name?.trim() || "";
+    } catch (e) {
+      console.warn("Could not load profile name", e);
+    }
+  }
+  if (!name) {
+    const local = String(user?.email || "").split("@")[0].replace(/[._-]+/g, " ").trim();
+    name = local ? local.replace(/\b\w/g, ch => ch.toUpperCase()) : "Account";
+  }
+  const brand = `${name} Tracker`;
+  document.querySelectorAll("[data-brand-name]").forEach(el => { el.textContent = brand; });
+  document.title = brand;
+}
+
+function showApp(s) {
+  $("authView").classList.add("hide");
+  $("appView").classList.remove("hide");
+  $("userEmail").textContent = s.user.email || "";
+  setAccountBrand(s.user);
+  showPage("dashboard");
+  load();
+}
 
 async function start() {
   if (!sb) { showAuth(); $("authMsg").textContent = "Add your Publishable key to config.js first."; return; }
@@ -501,7 +528,7 @@ $("authForm").onsubmit = async e => {
 $("logoutBtn").onclick=()=>sb.auth.signOut();
 
 const PAGE_META = {
-  dashboard: { title: "Today's revenue opportunities" },
+  dashboard: { title: "Dashboard" },
   clients: { title: "Clients" },
   prospects: { title: "Prospect Clients" },
   salary: { title: "Salary Calculator" },
@@ -519,13 +546,14 @@ function openMenu() {
 }
 
 function showPage(page) {
-  const pages = { dashboard: $("dashboardPage"), clients: $("clientsPage"), prospects: $("prospectsPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
+  const pages = { dashboard: $("dashboardPage"), clients: $("clientsPage"), clientDetail: $("clientDetailPage"), prospects: $("prospectsPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
   Object.entries(pages).forEach(([key, el]) => { if (el) el.classList.toggle("hide", key !== page); });
   document.querySelectorAll(".menu-item").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
   const meta = PAGE_META[page] || PAGE_META.dashboard;
   if ($("pageTitle")) $("pageTitle").textContent = meta.title;
   closeMenu();
   if (page === "clients") renderClients();
+  if (page === "clientDetail" && activeClientId) renderClientDetail(activeClientId);
   if (page === "prospects") renderProspects();
   if (page === "salary") renderSalaryPrediction();
   if (page === "calendar") renderCalendar();
@@ -720,34 +748,135 @@ $("prospectPackageForm").onsubmit=async e=>{
 
 function packageRemainingLabel(p) { return `${remainingForPackage(p)} remaining`; }
 
-window.detail = id => {
-  const c=clients.find(x=>x.id===id); if(!c)return;
-  activeClientId=id;
-  const x=analyse(c), ps=packagesForClient(c.id), clientSessions=sessionsForClient(c.id), phone=(c.phone||"").replace(/\D/g,"");
-  const sessionRows=clientSessions.length ? clientSessions.slice(0,10).map(s=>{ const dt=new Date(s.session_date); const date=dt.toLocaleDateString("en-GB"); const time=dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}); return `<div style="padding:10px 0;border-bottom:1px solid #eee"><div class="meta"><b>${date} · ${time}</b>${s.notes?` · ${esc(s.notes)}`:""}</div><div style="margin-top:6px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteSession(\'${s.id}\', \'${c.id}\')">Delete session</button></div></div>`; }).join("") : `<div class="empty">No sessions logged yet.</div>`;
-  const packageRows=ps.length ? ps.map(p=>`<div style="padding:12px 0;border-bottom:1px solid #eee"><div><b>${esc(packageInfo(p.package)?.label||p.package)}</b> · ${money(p.package_value)}</div><div class="meta">Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div><div style="margin-top:8px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deletePackage('${p.id}')">Delete package</button></div></div>`).join("") : `<div class="empty">No packages purchased yet.</div>`;
-  const packageSelect=ps.filter(p=>remainingForPackage(p)>0).map(p=>`<option value="${p.id}">${esc(packageInfo(p.package)?.label||p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
+function packageRemainingLabel(p) { return `${remainingForPackage(p)} remaining`; }
 
-  $("detailContent").innerHTML=`
-    <div class="head"><div><h2>${esc(c.name)}</h2></div><div class="actions"><button class="ghost small" onclick="openEditClient('${c.id}')">Edit</button><button class="icon" onclick="detailDialog.close()">×</button></div></div>
-    <p><b>Email:</b> ${esc(c.email||"—")}</p><p><b>Phone:</b> ${esc(c.phone||"—")}</p>
-    <p><b>Revenue opportunity:</b> ${money(x.opp)}</p><p><b>Sessions remaining:</b> ${x.remaining}</p>
-    <p><b>Lead source:</b> ${esc(c.lead_source||(c.lead?"Lead":"—"))}</p><p><b>Notes:</b> ${esc(c.notes||"—")}</p>
+function renderClientDetail(id) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  activeClientId = id;
+  const x = analyse(c), ps = packagesForClient(c.id), clientSessions = sessionsForClient(c.id);
+  const packageRows = ps.length ? ps.map(p => `<div class="package-card">
+      <div class="package-card-main">
+        <div class="name">${esc(packageInfo(p.package)?.label || p.package)}</div>
+        <div class="meta">${money(p.package_value)} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div>
+      </div>
+      <button class="ghost small danger" onclick="deletePackage('${p.id}')">Delete package</button>
+    </div>`).join("") : `<div class="empty">No packages purchased yet.</div>`;
 
-    <div style="margin:18px 0"><div class="head"><h3>Packages purchased</h3><button class="primary small" onclick="openAddPackage('${c.id}')">+ Add package</button></div>${packageRows}</div>
+  const sessionRows = clientSessions.length ? clientSessions.slice(0, 20).map(s => {
+    const dt = new Date(s.session_date);
+    const date = dt.toLocaleDateString("en-GB");
+    const time = dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    return `<div class="session-row">
+      <div><div class="name">${date} · ${time}</div>${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}</div>
+      <button class="ghost small danger" onclick="deleteSession('${s.id}', '${c.id}')">Delete</button>
+    </div>`;
+  }).join("") : `<div class="empty">No sessions logged yet.</div>`;
 
-    <div style="margin:18px 0"><h3>Log a session</h3>
+  const packageSelect = ps.filter(p => remainingForPackage(p) > 0)
+    .map(p => `<option value="${p.id}">${esc(packageInfo(p.package)?.label || p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
+
+  $("pageTitle").textContent = c.name || "Client";
+  $("clientDetailContent").innerHTML = `
+    <div class="client-detail-top">
+      <button class="ghost small" onclick="showPage('clients')">← Back to Clients</button>
+      <div class="client-detail-actions">
+        <button class="ghost small" onclick="toggleClientEdit()">Edit details</button>
+        <button class="ghost small danger" onclick="deleteClient('${c.id}')">Delete client</button>
+      </div>
+    </div>
+
+    <div class="client-hero">
+      <div>
+        <div class="eyebrow">CLIENT</div>
+        <h2>${esc(c.name)}</h2>
+        <div class="meta">${x.packageCount} package${x.packageCount===1?"":"s"} · ${x.remaining} sessions remaining · ${money(x.opp)} revenue opportunity</div>
+      </div>
+    </div>
+
+    <div id="clientEditSection" class="client-edit-section hide">
+      <div class="section-head"><h3>Edit personal details</h3></div>
+      <form id="clientDetailsForm" class="client-details-form">
+        <div class="grid">
+          <label>Name<input id="detailName" required value="${esc(c.name || "")}"></label>
+          <label>Phone<input id="detailPhone" value="${esc(c.phone || "")}" placeholder="+44..."></label>
+          <label>Email<input id="detailEmail" type="email" value="${esc(c.email || "")}" placeholder="client@email.com"></label>
+          <label>Lead source<select id="detailLeadSource">
+            <option value="" ${!c.lead_source?"selected":""}>Not a lead / existing client</option>
+            <option value="Web Inquiry" ${c.lead_source==="Web Inquiry"?"selected":""}>Web Inquiry</option>
+            <option value="Gym Floor Interaction" ${c.lead_source==="Gym Floor Interaction"?"selected":""}>Gym Floor Interaction</option>
+            <option value="PT Intro session" ${c.lead_source==="PT Intro session"?"selected":""}>PT Intro session</option>
+            <option value="Birthday Session" ${c.lead_source==="Birthday Session"?"selected":""}>Birthday Session</option>
+            <option value="Complimentary Session" ${c.lead_source==="Complimentary Session"?"selected":""}>Complimentary Session</option>
+            <option value="Workshop lead" ${c.lead_source==="Workshop lead"?"selected":""}>Workshop lead</option>
+            <option value="Point of Sales" ${c.lead_source==="Point of Sales"?"selected":""}>Point of Sales</option>
+            <option value="Fitness Manager" ${c.lead_source==="Fitness Manager"?"selected":""}>Fitness Manager</option>
+          </select></label>
+        </div>
+        <label>Notes<textarea id="detailNotes" rows="4">${esc(c.notes || "")}</textarea></label>
+        <div id="detailEditMsg" class="msg"></div>
+        <div class="actions"><button type="submit" class="primary">Save changes</button><button type="button" class="ghost" onclick="toggleClientEdit(false)">Cancel</button></div>
+      </form>
+    </div>
+
+    <div class="client-info-grid">
+      <div class="info-card"><div class="l">EMAIL</div><div class="v">${esc(c.email || "—")}</div></div>
+      <div class="info-card"><div class="l">PHONE</div><div class="v">${esc(c.phone || "—")}</div></div>
+      <div class="info-card"><div class="l">LEAD SOURCE</div><div class="v">${esc(c.lead_source || (c.lead ? "Lead" : "—"))}</div></div>
+      <div class="info-card"><div class="l">NOTES</div><div class="v">${esc(c.notes || "—")}</div></div>
+    </div>
+
+    <div class="detail-section">
+      <div class="section-head"><div><div class="eyebrow">PACKAGES</div><h3>Packages purchased</h3></div><button class="primary small" onclick="openAddPackage('${c.id}')">+ Add package</button></div>
+      ${packageRows}
+    </div>
+
+    <div class="detail-section">
+      <div class="section-head"><div><div class="eyebrow">SESSIONS</div><h3>Log a session</h3></div></div>
       ${packageSelect ? `<label>Package<select id="sessionPackage">${packageSelect}</select></label>` : `<div class="empty">Add a package before logging a session.</div>`}
-      <div class="session-datetime"><label>Date<input id="sessionDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></label><label>Time<input id="sessionTime" type="time" step="900" value="09:00" required></label></div>
+      ${packageSelect ? `<div class="session-datetime"><label>Date<input id="sessionDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></label><label>Time<input id="sessionTime" type="time" step="900" value="09:00" required></label></div>
       <div class="meta">The same time cannot be booked twice on the same day.</div>
       <label>Notes<textarea id="sessionNotes" rows="2" placeholder="Optional"></textarea></label>
       <div id="sessionMsg" class="msg"></div>
-      ${packageSelect ? `<button class="primary wide" onclick="logSession('${c.id}')">Save session</button>` : ""}
+      <button class="primary" onclick="logSession('${c.id}')">Save session</button>` : ""}
+
+      <div class="section-head sessions-list-head"><h3>Recent sessions</h3></div>
+      ${sessionRows}
     </div>
-    <div><h3>Recent sessions</h3>${sessionRows}</div>
-    <div style="margin-top:22px;padding-top:18px;border-top:1px solid #eee"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteClient('${c.id}')">Delete client</button><div class="meta" style="margin-top:6px">This permanently deletes the client and all recorded sessions, packages and follow-ups linked to them.</div></div>
-    ${phone?`<div style="margin-top:18px"><a class="primary" target="_blank" href="https://wa.me/${phone}?text=${encodeURIComponent("Hi "+c.name.split(" ")[0]+", just checking in. How are you getting on with your training?")}">Open WhatsApp</a></div>`:""}`;
-  $("detailDialog").showModal();
+  `;
+
+  $("clientDetailsForm")?.addEventListener("submit", saveClientDetails);
+}
+
+window.detail = id => {
+  activeClientId = id;
+  showPage("clientDetail");
+};
+
+window.toggleClientEdit = (force) => {
+  const section = $("clientEditSection");
+  if (!section) return;
+  const show = typeof force === "boolean" ? force : section.classList.contains("hide");
+  section.classList.toggle("hide", !show);
+};
+
+window.saveClientDetails = async e => {
+  e.preventDefault();
+  if (!activeClientId) return;
+  const msg = $("detailEditMsg");
+  const payload = {
+    name: $("detailName").value.trim(),
+    phone: $("detailPhone").value.trim() || null,
+    email: $("detailEmail").value.trim() || null,
+    lead_source: $("detailLeadSource").value || null,
+    lead: Boolean($("detailLeadSource").value),
+    notes: $("detailNotes").value.trim() || null
+  };
+  if (!payload.name) { if(msg) msg.textContent = "Name is required."; return; }
+  const { error } = await sb.from("clients").update(payload).eq("id", activeClientId);
+  if (error) { if(msg) msg.textContent = error.message; return; }
+  await load();
+  renderClientDetail(activeClientId);
 };
 
 window.openAddPackage = clientId => {
@@ -770,7 +899,7 @@ $("packageForm").onsubmit=async e=>{
     monthly:opt?.dataset.monthly==="true", purchased_at:new Date($("pPurchasedAt").value+"T12:00:00").toISOString()
   });
   if(error){$("packageMsg").textContent=error.message;return;}
-  $("packageDialog").close(); await load(); if($("detailDialog").open) detail(activeClientId);
+  $("packageDialog").close(); await load(); if(activeClientId) renderClientDetail(activeClientId);
 };
 
 window.openEditClient = clientId => {
@@ -824,7 +953,7 @@ window.deletePackage=async packageId=>{
   const {error}=await sb.from("packages").delete().eq("id",packageId);
   if(error){alert("Could not delete package: "+error.message);return;}
   await load();
-  if(activeClientId && $("detailDialog")?.open) detail(activeClientId);
+  if(activeClientId) renderClientDetail(activeClientId);
 };
 
 window.deleteSession=async (sessionId, clientId)=>{
@@ -837,7 +966,7 @@ window.deleteSession=async (sessionId, clientId)=>{
   const {error}=await sb.from("sessions").delete().eq("id",sessionId);
   if(error){alert("Could not delete session: "+error.message);return;}
   await load();
-  if(activeClientId && $("detailDialog")?.open) detail(clientId || activeClientId);
+  if(activeClientId) renderClientDetail(clientId || activeClientId);
 };
 
 window.deleteClient=async clientId=>{
@@ -845,7 +974,7 @@ window.deleteClient=async clientId=>{
   if(!confirm(`Delete ${c.name} and all their sessions, packages and follow-ups?\n\nThis cannot be undone.`))return;
   const {error}=await sb.rpc("delete_client_completely",{p_client_id:clientId});
   if(error){alert("Could not delete client: "+error.message);return;}
-  $("detailDialog").close();await load();
+  await load(); showPage("clients");
 };
 
 window.logSession=async clientId=>{
@@ -870,7 +999,7 @@ window.logSession=async clientId=>{
   }
   const {error}=await sb.from("sessions").insert({user_id:user.id,client_id:clientId,package_id:packageId,session_date:sessionDateTime.toISOString(),notes:notesValue});
   if(error){if(msg)msg.textContent=error.message;return;}
-  await load(); if($("detailDialog").open){$("detailDialog").close();detail(clientId);}
+  await load(); renderClientDetail(clientId);
 };
 
 start();

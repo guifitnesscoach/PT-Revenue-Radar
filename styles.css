@@ -133,3 +133,30 @@
 .prospect-row{border:1px solid #e5e7eb;border-radius:13px;padding:14px;margin:9px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}
 .prospect-main{min-width:0}.prospect-actions{flex-wrap:wrap;justify-content:flex-end}.danger{color:#b91c1c!important;border-color:#fecaca!important}
 @media(max-width:700px){.prospect-row{flex-direction:column;align-items:stretch}.prospect-actions{justify-content:flex-start}.prospect-tools{flex-wrap:wrap;justify-content:flex-end}}
+
+
+/* Client detail page */
+.client-detail-panel{padding:22px}
+.client-detail-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px}
+.client-detail-actions{display:flex;gap:7px;flex-wrap:wrap}
+.client-hero{padding:4px 0 18px;border-bottom:1px solid #e5e7eb}
+.client-hero h2{font-size:30px;margin:4px 0 6px}
+.client-info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:18px 0}
+.info-card{border:1px solid #e5e7eb;border-radius:13px;padding:13px;background:#fafafa}
+.info-card .l{font-size:10px;color:#6b7280;font-weight:850;letter-spacing:.05em}
+.info-card .v{font-size:14px;font-weight:700;margin-top:5px;word-break:break-word}
+.client-edit-section{border:1px solid #e5e7eb;background:#fafafa;border-radius:14px;padding:16px;margin:18px 0}
+.client-details-form .grid{margin:0}
+.detail-section{margin-top:24px;padding-top:20px;border-top:1px solid #e5e7eb}
+.section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.section-head h3{margin:3px 0}
+.package-card,.session-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin:8px 0;background:#fff}
+.package-card-main,.session-row>div{min-width:0}
+.sessions-list-head{margin-top:20px}
+@media(max-width:700px){
+  .client-detail-panel{padding:16px}
+  .client-detail-top{align-items:flex-start;flex-direction:column}
+  .client-hero h2{font-size:25px}
+  .client-info-grid{grid-template-columns:1fr}
+  .package-card,.session-row{align-items:flex-start}
+}
