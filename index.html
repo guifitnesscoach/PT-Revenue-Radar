@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PT Revenue Radar — MVP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PT REVENUE RADAR</div>
+      <h1>Know who to contact today.</h1>
+      <p>Find clients at risk, follow-ups due and revenue opportunities.</p>
+    </div>
+    <button id="addClientBtn" class="primary">+ Add client</button>
+  </header>
+
+  <main>
+    <section class="stats" id="stats"></section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Today's actions</h2>
+            <p>Prioritised by potential revenue and client risk.</p>
+          </div>
+          <select id="filter">
+            <option value="all">All</option>
+            <option value="risk">At risk</option>
+            <option value="renewal">Renewals</option>
+            <option value="lead">Leads</option>
+          </select>
+        </div>
+        <div id="actions"></div>
+      </div>
+
+      <aside class="panel">
+        <h2>Revenue opportunity</h2>
+        <div class="big-number" id="opportunity">£0</div>
+        <p>Estimated revenue currently at risk or awaiting follow-up.</p>
+        <div class="mini" id="breakdown"></div>
+      </aside>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Clients</h2>
+          <p>Simple client tracking for the MVP.</p>
+        </div>
+        <input id="search" placeholder="Search clients…">
+      </div>
+      <div id="clients"></div>
+    </section>
+  </main>
+
+  <dialog id="clientDialog">
+    <form method="dialog" id="clientForm">
+      <h2>Add client</h2>
+      <label>Name <input name="name" required></label>
+      <label>Phone <input name="phone"></label>
+      <label>Monthly value (£) <input name="value" type="number" min="0" value="200"></label>
+      <label>Normal sessions/month <input name="frequency" type="number" min="1" value="4"></label>
+      <label>Sessions this month <input name="sessions" type="number" min="0" value="1"></label>
+      <label>Days since last session <input name="days" type="number" min="0" value="7"></label>
+      <label>Sessions remaining <input name="remaining" type="number" min="0" value="2"></label>
+      <label>Lead? <select name="lead"><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <div class="dialog-actions">
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button class="primary" type="submit">Add client</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
