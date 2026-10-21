@@ -9,6 +9,7 @@ let clients = [];
 let sessions = [];
 let packages = [];
 let activeClientId = null;
+let baseMonthlySalary = 0;
 
 const money = n => new Intl.NumberFormat("en-GB", {
   style: "currency", currency: "GBP", maximumFractionDigits: 0
@@ -52,6 +53,88 @@ const sessionsThisMonth = clientId => {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
 };
+
+const COMMISSION_BANDS = [
+  { min: 0, max: 79, rate: 25 },
+  { min: 80, max: 89, rate: 32 },
+  { min: 90, max: 99, rate: 33.5 },
+  { min: 100, max: 109, rate: 37.5 },
+  { min: 110, max: 119, rate: 39 },
+  { min: 120, max: Infinity, rate: 43 }
+];
+
+function commissionRateFor(sessionsCount) {
+  const band = COMMISSION_BANDS.find(b => sessionsCount >= b.min && sessionsCount <= b.max);
+  return band ? band.rate : 0;
+}
+
+function calculateIncomeTax(annualGross) {
+  const personalAllowance = 12570;
+  const taxable = Math.max(0, annualGross - personalAllowance);
+  const basic = Math.min(taxable, 37700);
+  const higher = Math.min(Math.max(taxable - 37700, 0), 87440);
+  const additional = Math.max(taxable - 125140, 0);
+  return basic * 0.20 + higher * 0.40 + additional * 0.45;
+}
+
+function calculateEmployeeNI(annualGross) {
+  const primaryThreshold = 12570;
+  const upperEarningsLimit = 50270;
+  const mainBand = Math.min(Math.max(annualGross - primaryThreshold, 0), upperEarningsLimit - primaryThreshold);
+  const upperBand = Math.max(annualGross - upperEarningsLimit, 0);
+  return mainBand * 0.08 + upperBand * 0.02;
+}
+
+function salaryPrediction() {
+  const now = new Date();
+  const monthSessions = sessions.filter(s => {
+    const d = new Date(s.session_date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+  const rate = commissionRateFor(monthSessions);
+  const commission = monthSessions * rate;
+  const baseMonthly = Math.max(0, Number(baseMonthlySalary || 0));
+  const grossMonthly = baseMonthly + commission;
+  const annualGross = grossMonthly * 12;
+  const annualTax = calculateIncomeTax(annualGross);
+  const annualNI = calculateEmployeeNI(annualGross);
+  const monthlyTax = annualTax / 12;
+  const monthlyNI = annualNI / 12;
+  const takeHome = Math.max(0, grossMonthly - monthlyTax - monthlyNI);
+  return { monthSessions, rate, commission, baseMonthly, grossMonthly, monthlyTax, monthlyNI, takeHome };
+}
+
+function renderSalaryPrediction() {
+  const box = $('salaryPrediction');
+  if (!box) return;
+  const p = salaryPrediction();
+  const now = new Date();
+  const monthLabel = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const nextBand = COMMISSION_BANDS.find(b => p.monthSessions < b.min);
+  const progressText = nextBand
+    ? `Next rate: ${money(nextBand.rate)}/session at ${nextBand.min} sessions`
+    : 'Top rate reached';
+  box.innerHTML = `
+    <div class="head"><div><div class="eyebrow">SALARY PREDICTION</div><h2>${monthLabel}</h2></div><div class="salary-input"><label>Base monthly salary (£)<input id="baseSalary" type="number" min="0" step="100" value="0"></label></div></div>
+    <div class="salary-grid">
+      <div class="salary-metric"><div class="l">SESSIONS BOOKED</div><div class="v">${p.monthSessions}</div><div class="meta">All clients combined</div></div>
+      <div class="salary-metric"><div class="l">COMMISSION RATE</div><div class="v">${money(p.rate)}</div><div class="meta">${progressText}</div></div>
+      <div class="salary-metric"><div class="l">GROSS COMMISSION</div><div class="v">${money(p.commission)}</div><div class="meta">${p.monthSessions} × ${money(p.rate)}</div></div>
+      <div class="salary-metric"><div class="l">EST. TAX</div><div class="v">${money(p.monthlyTax)}</div><div class="meta">2026/27 PAYE estimate</div></div>
+      <div class="salary-metric"><div class="l">EST. NATIONAL INSURANCE</div><div class="v">${money(p.monthlyNI)}</div><div class="meta">Employee Class 1</div></div>
+      <div class="salary-metric highlight"><div class="l">EST. TAKE-HOME</div><div class="v">${money(p.takeHome)}</div><div class="meta">Gross salary less estimated tax + NI</div></div>
+    </div>
+    <div class="salary-note">Estimate assumes England PAYE, standard £12,570 Personal Allowance, no pension or student-loan deductions, and treats this month's gross as your monthly pay repeated for 12 months. Actual payslip tax can differ.</div>
+  `;
+  const input = $('baseSalary');
+  if (input) {
+    input.value = baseMonthlySalary;
+    input.oninput = () => {
+      baseMonthlySalary = Math.max(0, Number(input.value || 0));
+      renderSalaryPrediction();
+    };
+  }
+}
 
 function usedForPackage(p) {
   const linked = sessions.filter(s => s.package_id === p.id);
@@ -135,6 +218,7 @@ function render() {
   $("clientList").innerHTML = list.length
     ? list.map(c => card(c, analyse(c))).join("")
     : `<div class="empty">No clients found.</div>`;
+  renderSalaryPrediction();
 }
 
 function card(c, x) {
