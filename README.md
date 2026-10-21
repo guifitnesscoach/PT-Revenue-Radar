@@ -16,7 +16,3 @@ IMPORTANT: keep your existing `config.js` with your Supabase URL and Publishable
 
 ## Prospect spreadsheet import
 The Prospect Clients page supports importing CSV, XLSX, and XLS files. Use columns named Name and Email; Phone and Notes are optional. Duplicate prospect emails are skipped. Imported prospects are saved as Fitness Manager leads and do not create client accounts until converted with a package.
-
-
-## Account-specific branding
-The header and menu now use the account owner's full name from the Supabase profile (for example, “Guilherme Tracker”). If no name is available, the app falls back to the email name.
