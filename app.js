@@ -103,7 +103,7 @@ function analyse(c) {
 function render() {
   const analysed = clients.map(c => ({ c, x: analyse(c) }));
   const risk = analysed.filter(x => x.x.score >= 3);
-  const opportunity = a.reduce((sum, x) => sum + x.x.opp, 0);
+  const opportunity = analysed.reduce((sum, x) => sum + x.x.opp, 0);
 
   $("stats").innerHTML = [
     ["CLIENTS", clients.length],
