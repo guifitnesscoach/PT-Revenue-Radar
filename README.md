@@ -23,3 +23,6 @@ IMPORTANT: Do NOT overwrite your existing `config.js`, because it contains your 
 - Monthly session calendar on the dashboard with previous/next month and Today controls.
 - Booked sessions are shown on each calendar day; clicking a session opens the client.
 - Existing config.js is intentionally not included in the ZIP; keep your current Supabase key.
+
+
+Calendar v3: mobile-friendly 7-column monthly calendar with booked-session pills, previous/next month navigation, Today button, and client drill-down.

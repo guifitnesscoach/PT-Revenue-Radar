@@ -214,19 +214,26 @@ function renderCalendar() {
   monthLabel.textContent = new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
   const firstDay = new Date(year, month, 1);
-  const leading = (firstDay.getDay() + 6) % 7;
+  const leading = (firstDay.getDay() + 6) % 7; // Monday = 0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevMonthDays = new Date(year, month, 0).getDate();
-  const cells = [];
   const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
   const todayKey = dateKeyLocal(new Date());
   const clientMap = new Map(clients.map(c => [c.id, c]));
+  const cells = [];
+
+  // Weekday headers are part of the same 7-column grid so mobile browsers
+  // cannot collapse them into a single column.
+  ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d => {
+    cells.push(`<div class="calendar-weekday">${d}</div>`);
+  });
 
   for (let i = 0; i < totalCells; i++) {
     const dayOffset = i - leading + 1;
     let cellDate;
     let outside = false;
+
     if (dayOffset < 1) {
+      const prevMonthDays = new Date(year, month, 0).getDate();
       cellDate = new Date(year, month - 1, prevMonthDays + dayOffset);
       outside = true;
     } else if (dayOffset > daysInMonth) {
@@ -238,23 +245,28 @@ function renderCalendar() {
 
     const key = dateKeyLocal(cellDate);
     const daySessions = calendarSessionsForDay(key);
-    const sessionHtml = daySessions.length
-      ? daySessions.map(s => {
-          const client = clientMap.get(s.client_id);
-          const name = client ? client.name : "Unknown client";
-          const time = new Date(s.session_date).toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
-          return `<button type="button" class="calendar-session" onclick="detail('${s.client_id}')" title="${esc(name)} — ${time}"><span class="calendar-dot"></span><span class="calendar-session-name">${esc(name)}</span></button>`;
-        }).join("")
-      : `<div class="calendar-empty">${outside ? "" : "No sessions"}</div>`;
 
-    cells.push(`<div class="calendar-day${outside ? " outside" : ""}${key === todayKey ? " today" : ""}">
-      <div class="calendar-day-number">${cellDate.getDate()}</div>
-      <div class="calendar-sessions">${sessionHtml}</div>
-      ${daySessions.length > 1 ? `<div class="calendar-count">${daySessions.length} sessions</div>` : daySessions.length === 1 ? `<div class="calendar-count">1 session</div>` : ""}
-    </div>`);
+    const sessionHtml = daySessions.map(s => {
+      const client = clientMap.get(s.client_id);
+      const name = client ? client.name : "Unknown client";
+      const time = new Date(s.session_date).toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+      return `<button type="button" class="calendar-session" onclick="detail('${s.client_id}')" title="${esc(name)} — ${time}"><span class="calendar-session-name">${esc(name)}</span></button>`;
+    }).join("");
+
+    const more = daySessions.length > 5
+      ? `<div class="calendar-more">+${daySessions.length - 5} more</div>`
+      : "";
+
+    cells.push(`
+      <div class="calendar-day${outside ? " outside" : ""}${key === todayKey ? " today" : ""}">
+        <div class="calendar-day-number">${cellDate.getDate()}</div>
+        <div class="calendar-sessions">${sessionHtml}</div>
+        ${more}
+      </div>
+    `);
   }
 
-  grid.innerHTML = `<div class="calendar-weekdays">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<div>${d}</div>`).join("")}</div><div class="calendar-cells">${cells.join("")}</div>`;
+  grid.innerHTML = cells.join("");
 }
 
 function render() {
