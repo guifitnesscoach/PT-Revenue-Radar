@@ -184,7 +184,7 @@ function remainingForPackage(p) {
 function clientPackageSummary(clientId) {
   const ps = packagesForClient(clientId);
   const remaining = ps.reduce((sum, p) => sum + remainingForPackage(p), 0);
-  const opportunity = ps.reduce((sum, p) => sum + remainingForPackage(p) * Number(p.package_value || 0), 0);
+  const opportunity = ps.reduce((sum, p) => sum + remainingForPackage(p) * packagePrice(p.package), 0);
   return { ps, remaining, opportunity };
 }
 
@@ -763,7 +763,7 @@ function renderClientDetail(id) {
     return `<div class="package-card ${clickable ? "package-clickable" : "package-inactive"}" ${clickable ? `onclick="openPackage('${p.id}')" role="button" tabindex="0"` : ""}>
       <div class="package-card-main">
         <div class="name">${esc(packageInfo(p.package)?.label || p.package)}</div>
-        <div class="meta">${money(p.package_value)} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div>
+        <div class="meta">${money(packagePrice(p.package))} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div>
         ${clickable ? `<div class="package-link-hint">Open package → book & view sessions</div>` : `<div class="package-link-hint muted">Package completed</div>`}
       </div>
       <button class="ghost small danger package-delete-btn" onclick="event.stopPropagation(); deletePackage('${p.id}')">Delete package</button>
@@ -855,7 +855,7 @@ function renderPackageDetail(packageId) {
       <div><div class="eyebrow">PACKAGE</div><h2>${esc(info?.label || p.package)}</h2><div class="meta">Client: ${esc(c.name)} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")}</div></div>
     </div>
     <div class="package-summary-grid">
-      <div class="info-card"><div class="l">PACKAGE VALUE</div><div class="v">${money(p.package_value)}</div></div>
+      <div class="info-card"><div class="l">PACKAGE VALUE</div><div class="v">${money(packagePrice(p.package))}</div></div>
       <div class="info-card"><div class="l">TOTAL SESSIONS</div><div class="v">${p.package_sessions}</div></div>
       <div class="info-card"><div class="l">SESSIONS BOOKED</div><div class="v">${linkedSessions.length}</div></div>
       <div class="info-card"><div class="l">SESSIONS REMAINING</div><div class="v">${remaining}</div></div>
