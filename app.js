@@ -34,6 +34,15 @@ const PACKAGE_OPTIONS = [
 ];
 
 const packageInfo = value => PACKAGE_OPTIONS.find(p => p.value === value) || null;
+const PACKAGE_PRICES = {
+  "1_session_pack": 100,
+  "10_sessions_pack": 950,
+  "20_sessions_pack": 1800,
+  "4_dd": 340,
+  "8_dd": 680,
+  "12_dd": 1020
+};
+const packagePrice = value => PACKAGE_PRICES[value] ?? 0;
 const sessionsThisMonth = clientId => {
   const now = new Date();
   return sessionsForClient(clientId).filter(s => {
@@ -99,10 +108,12 @@ function render() {
   const risk = analysed.filter(x => x.x.score >= 3);
   const opportunity = analysed.reduce((sum, x) => sum + x.x.opp, 0);
 
+  const totalRemainingSessions = analysed.reduce((sum, x) => sum + x.x.remaining, 0);
   $("stats").innerHTML = [
     ["CLIENTS", clients.length],
     ["AT RISK", risk.length],
     ["FOLLOW-UPS", analysed.filter(x => x.x.score > 0).length],
+    ["REMAINING SESSIONS", totalRemainingSessions],
     ["REVENUE OPPORTUNITY", money(opportunity)]
   ].map(x => `<div class="stat"><div class="l">${x[0]}</div><div class="v">${x[1]}</div></div>`).join("");
 
@@ -218,7 +229,7 @@ window.detail = id => {
   const packageSelect=ps.filter(p=>remainingForPackage(p)>0).map(p=>`<option value="${p.id}">${esc(packageInfo(p.package)?.label||p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
 
   $("detailContent").innerHTML=`
-    <div class="head"><h2>${esc(c.name)}</h2><button class="icon" onclick="detailDialog.close()">×</button></div>
+    <div class="head"><div><h2>${esc(c.name)}</h2></div><div class="actions"><button class="ghost small" onclick="openEditClient('${c.id}')">Edit</button><button class="icon" onclick="detailDialog.close()">×</button></div></div>
     <p><b>Email:</b> ${esc(c.email||"—")}</p><p><b>Phone:</b> ${esc(c.phone||"—")}</p>
     <p><b>Revenue opportunity:</b> ${money(x.opp)}</p><p><b>Sessions remaining:</b> ${x.remaining}</p>
     <p><b>Lead source:</b> ${esc(c.lead_source||(c.lead?"Lead":"—"))}</p><p><b>Notes:</b> ${esc(c.notes||"—")}</p>
@@ -254,12 +265,47 @@ $("packageForm").onsubmit=async e=>{
   const opt=$("pPackage").selectedOptions[0];
   const {error}=await sb.from("packages").insert({
     user_id:user.id, client_id:activeClientId, package:$("pPackage").value,
-    package_sessions:Number(opt?.dataset.sessions||0), package_value:Number($("pValue").value||0),
+    package_sessions:Number(opt?.dataset.sessions||0), package_value:packagePrice($("pPackage").value),
     monthly:opt?.dataset.monthly==="true", purchased_at:new Date($("pPurchasedAt").value+"T12:00:00").toISOString()
   });
   if(error){$("packageMsg").textContent=error.message;return;}
   $("packageDialog").close(); await load(); if($("detailDialog").open) detail(activeClientId);
 };
+
+window.openEditClient = clientId => {
+  const c = clients.find(x => x.id === clientId);
+  if (!c) return;
+  activeClientId = clientId;
+  $("eName").value = c.name || "";
+  $("ePhone").value = c.phone || "";
+  $("eEmail").value = c.email || "";
+  $("editClientMsg").textContent = "";
+  $("editClientDialog").showModal();
+};
+
+$("closeEditClientDialog").onclick = () => $("editClientDialog").close();
+$("editClientForm").onsubmit = async e => {
+  e.preventDefault();
+  if (!activeClientId) return;
+  const payload = {
+    name: $("eName").value.trim(),
+    phone: $("ePhone").value.trim() || null,
+    email: $("eEmail").value.trim() || null
+  };
+  const { error } = await sb.from("clients").update(payload).eq("id", activeClientId);
+  if (error) { $("editClientMsg").textContent = error.message; return; }
+  $("editClientDialog").close();
+  await load();
+  if ($("detailDialog").open) detail(activeClientId);
+};
+
+$("pPackage").addEventListener("change", () => {
+  const value = $("pPackage").value;
+  const info = packageInfo(value);
+  const price = packagePrice(value);
+  $("pValue").value = price ? price.toFixed(2) : "";
+  $("pRate").textContent = info ? `${info.sessions} session${info.sessions === 1 ? "" : "s"} · ${money(price / info.sessions)} per session` : "Select a package to calculate the price automatically.";
+});
 
 window.deleteClient=async clientId=>{
   const c=clients.find(x=>x.id===clientId);if(!c)return;
