@@ -1,6 +1,18 @@
-# PT Revenue Radar SaaS v1
-1. Open config.js.
-2. Replace PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE with your Supabase Publishable key.
-3. Never use a secret/service_role key.
-4. Upload all files to GitHub Pages.
-This version includes Supabase login/signup, per-user clients, dashboard, risk logic and WhatsApp links.
+# PT Revenue Radar — Full Fixed Version
+
+This version fixes the JavaScript startup/login issue and includes the current client/package features.
+
+Included:
+- Login / signup with Supabase
+- Add client with email and lead source
+- Edit client name, phone and email
+- Multiple packages per client
+- Automatic package pricing
+- Package purchase history
+- Session tracking linked to packages
+- Remaining sessions
+- Revenue opportunity
+- Delete client and linked data
+- Mobile responsive layout
+
+IMPORTANT: Do NOT overwrite your existing `config.js`, because it contains your Supabase Publishable key. `config.js.example` is only a template.

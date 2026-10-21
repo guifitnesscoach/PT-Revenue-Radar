@@ -1,6 +1,6 @@
 const C = window.PTRR_CONFIG || {};
-const sb = C.supabasePublishableKey && !C.supabasePublishableKey.includes("PASTE_")
-  ? supabase.createClient(C.supabaseUrl, C.supabasePublishableKey)
+const sb = C.supabaseUrl && C.supabasePublishableKey && !C.supabasePublishableKey.includes("PASTE_") && window.supabase
+  ? window.supabase.createClient(C.supabaseUrl, C.supabasePublishableKey)
   : null;
 
 const $ = id => document.getElementById(id);
@@ -299,13 +299,16 @@ $("editClientForm").onsubmit = async e => {
   if ($("detailDialog").open) detail(activeClientId);
 };
 
-$("pPackage").addEventListener("change", () => {
-  const value = $("pPackage").value;
-  const info = packageInfo(value);
-  const price = packagePrice(value);
-  $("pValue").value = price ? price.toFixed(2) : "";
-  $("pRate").textContent = info ? `${info.sessions} session${info.sessions === 1 ? "" : "s"} · ${money(price / info.sessions)} per session` : "Select a package to calculate the price automatically.";
-});
+const packageSelect = $("pPackage");
+if (packageSelect) {
+  packageSelect.addEventListener("change", () => {
+    const value = packageSelect.value;
+    const info = packageInfo(value);
+    const price = packagePrice(value);
+    if ($("pValue")) $("pValue").value = price ? price.toFixed(2) : "";
+    if ($("pRate")) $("pRate").textContent = info ? `${info.sessions} session${info.sessions === 1 ? "" : "s"} · ${money(price / info.sessions)} per session` : "Select a package to calculate the price automatically.";
+  });
+}
 
 window.deleteClient=async clientId=>{
   const c=clients.find(x=>x.id===clientId);if(!c)return;
