@@ -20,3 +20,6 @@ The Prospect Clients page supports importing CSV, XLSX, and XLS files. Use colum
 
 ## Account-specific branding
 The header and menu now use the account owner's full name from the Supabase profile (for example, “Guilherme Tracker”). If no name is available, the app falls back to the email name.
+
+
+Update: client pages now show packages only; session booking/history are handled inside each package page.

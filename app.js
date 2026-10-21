@@ -756,7 +756,7 @@ function renderClientDetail(id) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
   activeClientId = id;
-  const x = analyse(c), ps = packagesForClient(c.id), clientSessions = sessionsForClient(c.id);
+  const x = analyse(c), ps = packagesForClient(c.id);
   const packageRows = ps.length ? ps.map(p => {
     const remaining = remainingForPackage(p);
     const clickable = remaining > 0;
@@ -769,19 +769,6 @@ function renderClientDetail(id) {
       <button class="ghost small danger package-delete-btn" onclick="event.stopPropagation(); deletePackage('${p.id}')">Delete package</button>
     </div>`;
   }).join("") : `<div class="empty">No packages purchased yet.</div>`;
-
-  const sessionRows = clientSessions.length ? clientSessions.slice(0, 20).map(s => {
-    const dt = new Date(s.session_date);
-    const date = dt.toLocaleDateString("en-GB");
-    const time = dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-    return `<div class="session-row">
-      <div><div class="name">${date} · ${time}</div>${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}</div>
-      <button class="ghost small danger" onclick="deleteSession('${s.id}', '${c.id}')">Delete</button>
-    </div>`;
-  }).join("") : `<div class="empty">No sessions logged yet.</div>`;
-
-  const packageSelect = ps.filter(p => remainingForPackage(p) > 0)
-    .map(p => `<option value="${p.id}">${esc(packageInfo(p.package)?.label || p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
 
   $("pageTitle").textContent = c.name || "Client";
   $("clientDetailContent").innerHTML = `
@@ -835,20 +822,8 @@ function renderClientDetail(id) {
 
     <div class="detail-section">
       <div class="section-head"><div><div class="eyebrow">PACKAGES</div><h3>Packages purchased</h3></div><button class="primary small" onclick="openAddPackage('${c.id}')">+ Add package</button></div>
+      <div class="meta" style="margin-bottom:12px">Select an active package to book or view its sessions.</div>
       ${packageRows}
-    </div>
-
-    <div class="detail-section">
-      <div class="section-head"><div><div class="eyebrow">SESSIONS</div><h3>Log a session</h3></div></div>
-      ${packageSelect ? `<label>Package<select id="sessionPackage">${packageSelect}</select></label>` : `<div class="empty">Add a package before logging a session.</div>`}
-      ${packageSelect ? `<div class="session-datetime"><label>Date<input id="sessionDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></label><label>Time<input id="sessionTime" type="time" step="900" value="09:00" required></label></div>
-      <div class="meta">The same time cannot be booked twice on the same day.</div>
-      <label>Notes<textarea id="sessionNotes" rows="2" placeholder="Optional"></textarea></label>
-      <div id="sessionMsg" class="msg"></div>
-      <button class="primary" onclick="logSession('${c.id}')">Save session</button>` : ""}
-
-      <div class="section-head sessions-list-head"><h3>Recent sessions</h3></div>
-      ${sessionRows}
     </div>
   `;
 
