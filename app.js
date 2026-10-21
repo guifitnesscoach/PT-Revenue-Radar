@@ -11,6 +11,8 @@ let packages = [];
 let activeClientId = null;
 let baseMonthlySalary = 0;
 let calendarDate = new Date();
+let salaryDate = new Date();
+let calendarDayKey = null;
 
 const money = n => new Intl.NumberFormat("en-GB", {
   style: "currency", currency: "GBP", maximumFractionDigits: 0
@@ -86,12 +88,17 @@ function calculateEmployeeNI(annualGross) {
   return mainBand * 0.08 + upperBand * 0.02;
 }
 
-function salaryPrediction() {
-  const now = new Date();
-  const monthSessions = sessions.filter(s => {
+function monthSessionsForDate(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  return sessions.filter(s => {
     const d = new Date(s.session_date);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+}
+
+function salaryPrediction(forDate = salaryDate) {
+  const monthSessions = monthSessionsForDate(forDate).length;
   const rate = commissionRateFor(monthSessions);
   const commission = monthSessions * rate;
   const baseMonthly = Math.max(0, Number(baseMonthlySalary || 0));
@@ -108,17 +115,25 @@ function salaryPrediction() {
 function renderSalaryPrediction() {
   const box = $('salaryPrediction');
   if (!box) return;
-  const p = salaryPrediction();
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const p = salaryPrediction(salaryDate);
+  const monthLabel = salaryDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const nextBand = COMMISSION_BANDS.find(b => p.monthSessions < b.min);
   const progressText = nextBand
     ? `Next rate: ${money(nextBand.rate)}/session at ${nextBand.min} sessions`
     : 'Top rate reached';
+
   box.innerHTML = `
-    <div class="head"><div><div class="eyebrow">SALARY PREDICTION</div><h2>${monthLabel}</h2></div><div class="salary-input"><label>Base monthly salary (£)<input id="baseSalary" type="number" min="0" step="100" value="0"></label></div></div>
+    <div class="head salary-head">
+      <div><div class="eyebrow">SALARY PREDICTION</div><h2>${monthLabel}</h2></div>
+      <div class="salary-controls">
+        <button id="salaryPrev" class="ghost small" type="button">‹</button>
+        <button id="salaryToday" class="ghost small" type="button">Today</button>
+        <button id="salaryNext" class="ghost small" type="button">›</button>
+        <div class="salary-input"><label>Base monthly salary (£)<input id="baseSalary" type="number" min="0" step="100" value="0"></label></div>
+      </div>
+    </div>
     <div class="salary-grid">
-      <div class="salary-metric"><div class="l">SESSIONS BOOKED</div><div class="v">${p.monthSessions}</div><div class="meta">All clients combined</div></div>
+      <div class="salary-metric"><div class="l">SESSIONS BOOKED</div><div class="v">${p.monthSessions}</div><div class="meta">All clients combined in ${monthLabel}</div></div>
       <div class="salary-metric"><div class="l">COMMISSION RATE</div><div class="v">${money(p.rate)}</div><div class="meta">${progressText}</div></div>
       <div class="salary-metric"><div class="l">GROSS COMMISSION</div><div class="v">${money(p.commission)}</div><div class="meta">${p.monthSessions} × ${money(p.rate)}</div></div>
       <div class="salary-metric"><div class="l">EST. TAX</div><div class="v">${money(p.monthlyTax)}</div><div class="meta">2026/27 PAYE estimate</div></div>
@@ -135,6 +150,19 @@ function renderSalaryPrediction() {
       renderSalaryPrediction();
     };
   }
+  $('salaryPrev').onclick = () => {
+    salaryDate = new Date(salaryDate.getFullYear(), salaryDate.getMonth()-1, 1);
+    renderSalaryPrediction();
+  };
+  $('salaryNext').onclick = () => {
+    salaryDate = new Date(salaryDate.getFullYear(), salaryDate.getMonth()+1, 1);
+    renderSalaryPrediction();
+  };
+  $('salaryToday').onclick = () => {
+    const now = new Date();
+    salaryDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    renderSalaryPrediction();
+  };
 }
 
 function usedForPackage(p) {
@@ -207,30 +235,39 @@ function calendarSessionsForDay(key) {
 function renderCalendar() {
   const grid = $("calendarGrid");
   const monthLabel = $("calendarMonth");
+  const monthView = $("calendarMonthView");
+  const dayView = $("calendarDayView");
   if (!grid || !monthLabel) return;
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
   monthLabel.textContent = new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
+  if (calendarDayKey) {
+    if (monthView) monthView.classList.add("hide");
+    if (dayView) dayView.classList.remove("hide");
+    renderCalendarDay(calendarDayKey);
+    return;
+  }
+
+  if (monthView) monthView.classList.remove("hide");
+  if (dayView) dayView.classList.add("hide");
+
   const firstDay = new Date(year, month, 1);
-  const leading = (firstDay.getDay() + 6) % 7; // Monday = 0
+  const leading = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
   const todayKey = dateKeyLocal(new Date());
   const clientMap = new Map(clients.map(c => [c.id, c]));
   const cells = [];
 
-  // Weekday headers are part of the same 7-column grid so mobile browsers
-  // cannot collapse them into a single column.
   ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d => {
     cells.push(`<div class="calendar-weekday">${d}</div>`);
   });
 
   for (let i = 0; i < totalCells; i++) {
     const dayOffset = i - leading + 1;
-    let cellDate;
-    let outside = false;
+    let cellDate, outside = false;
 
     if (dayOffset < 1) {
       const prevMonthDays = new Date(year, month, 0).getDate();
@@ -246,19 +283,19 @@ function renderCalendar() {
     const key = dateKeyLocal(cellDate);
     const daySessions = calendarSessionsForDay(key);
 
-    const sessionHtml = daySessions.map(s => {
+    const sessionHtml = daySessions.slice(0,5).map(s => {
       const client = clientMap.get(s.client_id);
       const name = client ? client.name : "Unknown client";
       const time = new Date(s.session_date).toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
-      return `<button type="button" class="calendar-session" onclick="detail('${s.client_id}')" title="${esc(name)} — ${time}"><span class="calendar-session-name">${esc(name)}</span></button>`;
+      return `<button type="button" class="calendar-session" onclick="event.stopPropagation();detail('${s.client_id}')" title="${esc(name)} — ${time}">
+        <span class="calendar-session-time">${time}</span><span class="calendar-session-name">${esc(name)}</span>
+      </button>`;
     }).join("");
 
-    const more = daySessions.length > 5
-      ? `<div class="calendar-more">+${daySessions.length - 5} more</div>`
-      : "";
+    const more = daySessions.length > 5 ? `<div class="calendar-more">+${daySessions.length - 5} more</div>` : "";
 
     cells.push(`
-      <div class="calendar-day${outside ? " outside" : ""}${key === todayKey ? " today" : ""}">
+      <div class="calendar-day${outside ? " outside" : ""}${key === todayKey ? " today" : ""}" role="button" tabindex="0" onclick="openCalendarDay('${key}')" onkeydown="if(event.key==='Enter'||event.key===' ')openCalendarDay('${key}')">
         <div class="calendar-day-number">${cellDate.getDate()}</div>
         <div class="calendar-sessions">${sessionHtml}</div>
         ${more}
@@ -268,6 +305,53 @@ function renderCalendar() {
 
   grid.innerHTML = cells.join("");
 }
+
+function renderCalendarDay(key) {
+  const title = $("calendarDayTitle");
+  const body = $("calendarDayBody");
+  if (!title || !body) return;
+
+  const d = new Date(`${key}T12:00:00`);
+  title.textContent = d.toLocaleDateString("en-GB", {
+    weekday:"short", day:"numeric", month:"long", year:"numeric"
+  });
+
+  const clientMap = new Map(clients.map(c => [c.id, c]));
+  const daySessions = calendarSessionsForDay(key);
+  const rows = [];
+
+  for (let hour = 5; hour <= 23; hour++) {
+    const hourSessions = daySessions.filter(s => new Date(s.session_date).getHours() === hour);
+    const time = `${String(hour).padStart(2,"0")}:00`;
+
+    const content = hourSessions.map(session => {
+      const client = clientMap.get(session.client_id);
+      const name = client?.name || "Unknown client";
+      const exact = new Date(session.session_date).toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+      return `<button type="button" class="day-session-block" onclick="detail('${session.client_id}')">
+        <span>${esc(name)}</span><small>${exact}</small>
+      </button>`;
+    }).join("");
+
+    rows.push(`<div class="day-hour-row"><div class="day-hour-label">${time}</div><div class="day-hour-slot">${content}</div></div>`);
+  }
+
+  body.innerHTML = daySessions.length
+    ? rows.join("")
+    : `<div class="empty day-empty">No sessions booked on this day.</div>`;
+}
+
+window.openCalendarDay = key => {
+  calendarDayKey = key;
+  const d = new Date(`${key}T12:00:00`);
+  calendarDate = new Date(d.getFullYear(), d.getMonth(), 1);
+  renderCalendar();
+};
+
+window.closeCalendarDay = () => {
+  calendarDayKey = null;
+  renderCalendar();
+};
 
 function render() {
   const analysed = clients.map(c => ({ c, x: analyse(c) }));
@@ -401,9 +485,10 @@ document.querySelectorAll(".menu-item").forEach(btn => {
 $("menuBtn").onclick = openMenu;
 $("closeMenu").onclick = closeMenu;
 $("menuBackdrop").onclick = closeMenu;
-$("calendarPrev").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
-$("calendarNext").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
-$("calendarToday").onclick=()=>{ const now=new Date(); calendarDate=new Date(now.getFullYear(),now.getMonth(),1); renderCalendar(); };
+$("calendarPrev").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
+$("calendarNext").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
+$("calendarToday").onclick=()=>{ const now=new Date(); calendarDayKey=null; calendarDate=new Date(now.getFullYear(),now.getMonth(),1); renderCalendar(); };
+$("calendarBackMonth").onclick=()=>{ calendarDayKey=null; renderCalendar(); };
 $("search").oninput=render;
 $("addClientBtn").onclick=()=>{ $("clientForm").reset(); $("clientDialog").showModal(); };
 $("closeDialog").onclick=()=>$("clientDialog").close();
@@ -431,7 +516,7 @@ window.detail = id => {
   const c=clients.find(x=>x.id===id); if(!c)return;
   activeClientId=id;
   const x=analyse(c), ps=packagesForClient(c.id), clientSessions=sessionsForClient(c.id), phone=(c.phone||"").replace(/\D/g,"");
-  const sessionRows=clientSessions.length ? clientSessions.slice(0,10).map(s=>`<div style="padding:10px 0;border-bottom:1px solid #eee"><div class="meta">${new Date(s.session_date).toLocaleDateString("en-GB")}${s.notes?` · ${esc(s.notes)}`:""}</div><div style="margin-top:6px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteSession(\'${s.id}\', \'${c.id}\')">Delete session</button></div></div>`).join("") : `<div class="empty">No sessions logged yet.</div>`;
+  const sessionRows=clientSessions.length ? clientSessions.slice(0,10).map(s=>{ const dt=new Date(s.session_date); const date=dt.toLocaleDateString("en-GB"); const time=dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}); return `<div style="padding:10px 0;border-bottom:1px solid #eee"><div class="meta"><b>${date} · ${time}</b>${s.notes?` · ${esc(s.notes)}`:""}</div><div style="margin-top:6px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteSession(\'${s.id}\', \'${c.id}\')">Delete session</button></div></div>`; }).join("") : `<div class="empty">No sessions logged yet.</div>`;
   const packageRows=ps.length ? ps.map(p=>`<div style="padding:12px 0;border-bottom:1px solid #eee"><div><b>${esc(packageInfo(p.package)?.label||p.package)}</b> · ${money(p.package_value)}</div><div class="meta">Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div><div style="margin-top:8px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deletePackage('${p.id}')">Delete package</button></div></div>`).join("") : `<div class="empty">No packages purchased yet.</div>`;
   const packageSelect=ps.filter(p=>remainingForPackage(p)>0).map(p=>`<option value="${p.id}">${esc(packageInfo(p.package)?.label||p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
 
@@ -445,7 +530,8 @@ window.detail = id => {
 
     <div style="margin:18px 0"><h3>Log a session</h3>
       ${packageSelect ? `<label>Package<select id="sessionPackage">${packageSelect}</select></label>` : `<div class="empty">Add a package before logging a session.</div>`}
-      <label>Date<input id="sessionDate" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
+      <div class="session-datetime"><label>Date<input id="sessionDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></label><label>Time<input id="sessionTime" type="time" step="900" value="09:00" required></label></div>
+      <div class="meta">The same time cannot be booked twice on the same day.</div>
       <label>Notes<textarea id="sessionNotes" rows="2" placeholder="Optional"></textarea></label>
       <div id="sessionMsg" class="msg"></div>
       ${packageSelect ? `<button class="primary wide" onclick="logSession('${c.id}')">Save session</button>` : ""}
@@ -536,8 +622,10 @@ window.deletePackage=async packageId=>{
 window.deleteSession=async (sessionId, clientId)=>{
   const s=sessions.find(x=>x.id===sessionId);
   if(!s)return;
-  const date=new Date(s.session_date).toLocaleDateString("en-GB");
-  if(!confirm(`Delete the session booked for ${date}?\n\nThis will return the session to the package and cannot be undone.`))return;
+  const dt=new Date(s.session_date);
+  const date=dt.toLocaleDateString("en-GB");
+  const time=dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  if(!confirm(`Delete the session booked for ${date} at ${time}?\n\nThis will return the session to the package and cannot be undone.`))return;
   const {error}=await sb.from("sessions").delete().eq("id",sessionId);
   if(error){alert("Could not delete session: "+error.message);return;}
   await load();
@@ -560,9 +648,19 @@ window.logSession=async clientId=>{
   if(!p){if(msg)msg.textContent="Package not found.";return;}
   if(remainingForPackage(p)<=0){if(msg)msg.textContent="This package has no remaining sessions.";return;}
   const {data:{user}}=await sb.auth.getUser();
-  const dateValue=$("sessionDate").value, notesValue=$("sessionNotes").value.trim()||null;
+  const dateValue=$("sessionDate").value, timeValue=$("sessionTime")?.value, notesValue=$("sessionNotes").value.trim()||null;
   if(!dateValue){if(msg)msg.textContent="Please choose a date.";return;}
-  const {error}=await sb.from("sessions").insert({user_id:user.id,client_id:clientId,package_id:packageId,session_date:new Date(dateValue+"T12:00:00").toISOString(),notes:notesValue});
+  if(!timeValue){if(msg)msg.textContent="Please choose a time.";return;}
+  const sessionDateTime = new Date(`${dateValue}T${timeValue}:00`);
+  if(Number.isNaN(sessionDateTime.getTime())){if(msg)msg.textContent="Please choose a valid date and time.";return;}
+  const clash = sessions.find(s => new Date(s.session_date).getTime() === sessionDateTime.getTime());
+  if(clash){
+    const clashClient = clients.find(c => c.id === clash.client_id);
+    const clashName = clashClient?.name || "another client";
+    if(msg)msg.textContent=`That time is already booked with ${clashName}. Please choose another time.`;
+    return;
+  }
+  const {error}=await sb.from("sessions").insert({user_id:user.id,client_id:clientId,package_id:packageId,session_date:sessionDateTime.toISOString(),notes:notesValue});
   if(error){if(msg)msg.textContent=error.message;return;}
   await load(); if($("detailDialog").open){$("detailDialog").close();detail(clientId);}
 };

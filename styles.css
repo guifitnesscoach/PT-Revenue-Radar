@@ -73,3 +73,50 @@
   header h1{font-size:18px}
   .top span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+
+
+/* Session date/time booking */
+.session-datetime{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.calendar-session-time{display:block;font-size:8px;font-weight:850;opacity:.78;line-height:1.05;margin-bottom:1px}
+.calendar-session-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:560px){.session-datetime{grid-template-columns:1fr 1fr}.calendar-session-time{font-size:7px}.calendar-session-name{font-size:8px}}
+
+
+/* Salary month navigation */
+.salary-head{align-items:flex-end}
+.salary-controls{display:flex;align-items:flex-end;gap:6px}
+.salary-controls .salary-input{min-width:190px}
+.salary-controls .salary-input label{margin:0}
+
+/* Calendar daily breakdown */
+.calendar-hint{font-size:12px;color:#6b7280;margin:-4px 0 10px}
+.calendar-day{cursor:pointer;text-align:left;border:0;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}
+.calendar-day:hover{background:#f8fafc}
+.day-view-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.day-view-head h2{margin:3px 0;font-size:20px}
+.day-schedule{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#f8fafc}
+.day-hour-row{display:grid;grid-template-columns:72px 1fr;min-height:58px;border-bottom:1px solid #e5e7eb}
+.day-hour-row:last-child{border-bottom:0}
+.day-hour-label{padding:13px 10px 0;text-align:right;font-size:12px;font-weight:700;color:#6b7280;background:#f8fafc}
+.day-hour-slot{background:#fff;padding:5px 8px;display:flex;flex-direction:column;gap:5px}
+.day-session-block{width:100%;min-height:46px;border:0;border-radius:8px;background:#65aee3;color:#123047;padding:7px 10px;text-align:left;font-weight:750;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.day-session-block:hover{background:#4b9bd4}
+.day-session-block small{font-size:11px;font-weight:800;opacity:.8}
+.day-empty{background:#fff;border-radius:12px}
+
+@media(max-width:700px){
+  .salary-controls{flex-wrap:wrap;justify-content:flex-end}
+  .salary-controls .salary-input{width:100%;min-width:0}
+  .salary-controls .salary-input input{max-width:180px}
+}
+@media(max-width:560px){
+  .salary-head{align-items:stretch}
+  .salary-controls{display:grid;grid-template-columns:auto 1fr auto;align-items:end}
+  .salary-controls .salary-input{grid-column:1/-1}
+  .salary-controls .salary-input input{max-width:none}
+  .day-view-head{align-items:flex-start;flex-direction:column}
+  .day-view-head h2{font-size:18px}
+  .day-hour-row{grid-template-columns:58px 1fr;min-height:58px}
+  .day-hour-label{font-size:11px;padding-right:7px}
+  .day-session-block{padding:8px;font-size:13px}
+}
