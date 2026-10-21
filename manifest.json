@@ -1,0 +1,10 @@
+{
+  "name": "PT Revenue Radar",
+  "short_name": "Revenue Radar",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f6",
+  "theme_color": "#111214",
+  "description": "Daily revenue recovery dashboard for personal trainers.",
+  "icons": []
+}

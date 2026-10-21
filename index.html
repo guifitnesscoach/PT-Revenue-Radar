@@ -2,92 +2,108 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111214">
-  <title>PT Revenue Radar — V2</title>
+  <meta name="description" content="PT Revenue Radar — your daily personal training revenue recovery dashboard.">
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="styles.css">
+  <title>PT Revenue Radar</title>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="eyebrow">PT REVENUE RADAR · V2</div>
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">PT REVENUE RADAR · FINAL</div>
       <h1>Know who to contact today.</h1>
       <p>Turn client risk into clear actions and recover revenue before it disappears.</p>
+      <div class="hero-actions">
+        <button class="btn btn-primary" id="addClientBtn">＋ Add client</button>
+        <button class="btn btn-ghost" id="exportBtn">Export backup</button>
+        <label class="btn btn-ghost file-btn">Import backup<input id="importInput" type="file" accept=".json"></label>
+      </div>
     </div>
-    <button id="addClientBtn" class="primary">+ Add client</button>
   </header>
 
-  <main>
-    <section class="hero-alert" id="heroAlert"></section>
+  <main class="container">
+    <section class="stats-grid" id="stats"></section>
 
-    <section class="stats" id="stats"></section>
-
-    <section class="panel priority-panel">
-      <div class="panel-head">
+    <section class="panel priorities-panel">
+      <div class="section-head">
         <div>
+          <div class="section-kicker">TODAY</div>
           <h2>🔥 Today's top priorities</h2>
           <p>The clients most likely to create revenue or retention impact.</p>
         </div>
-        <select id="filter">
+        <select id="filterSelect" class="select">
           <option value="all">All actions</option>
-          <option value="risk">At risk</option>
+          <option value="at-risk">At risk</option>
           <option value="renewal">Renewals</option>
+          <option value="follow-up">Follow-ups</option>
           <option value="lead">Leads</option>
+          <option value="rebook">Ready to rebook</option>
         </select>
       </div>
-      <div id="actions"></div>
-    </section>
-
-    <section class="grid">
-      <aside class="panel">
-        <h2>Revenue opportunity</h2>
-        <div class="big-number" id="opportunity">£0</div>
-        <p>Estimated value connected to today's recommended actions.</p>
-        <div class="mini" id="breakdown"></div>
-      </aside>
-
-      <aside class="panel">
-        <h2>Radar logic</h2>
-        <div class="logic">
-          <div><b>🔥 At risk</b><span>14+ days inactive or major frequency drop</span></div>
-          <div><b>🔄 Renewal</b><span>1 session or less remaining</span></div>
-          <div><b>📲 Lead</b><span>New lead waiting for follow-up</span></div>
-        </div>
-      </aside>
+      <div id="priorityList" class="priority-list"></div>
     </section>
 
     <section class="panel">
-      <div class="panel-head">
+      <div class="section-head compact">
         <div>
-          <h2>Clients</h2>
-          <p>Search your list and see why each person is healthy or needs attention.</p>
+          <div class="section-kicker">CLIENTS</div>
+          <h2>Your client book</h2>
         </div>
-        <input id="search" placeholder="Search clients…">
+        <input id="searchInput" class="search" type="search" placeholder="Search name or phone…">
       </div>
-      <div id="clients"></div>
+      <div id="clientList" class="client-list"></div>
     </section>
+
+    <section class="panel insight-panel">
+      <div class="section-kicker">HOW IT WORKS</div>
+      <h2>WHO → WHY → WHAT → £</h2>
+      <div class="logic-grid">
+        <div><strong>WHO</strong><span>Find the client who needs attention.</span></div>
+        <div><strong>WHY</strong><span>See the reason: inactivity, frequency drop, renewal, lead or follow-up.</span></div>
+        <div><strong>WHAT</strong><span>Get a recommended next action and a ready-to-send message.</span></div>
+        <div><strong>£</strong><span>See the revenue opportunity attached to the action.</span></div>
+      </div>
+    </section>
+
+    <footer>PT Revenue Radar · Final front-end MVP · Data is stored locally on this device.</footer>
   </main>
 
   <dialog id="clientDialog">
-    <form method="dialog" id="clientForm">
-      <h2>Add client</h2>
-      <p class="form-help">For V2, keep the data simple. We will connect this to a real database later.</p>
-      <label>Name <input name="name" required></label>
-      <label>Phone <input name="phone" inputmode="tel"></label>
-      <label>Monthly value (£) <input name="value" type="number" min="0" value="200"></label>
-      <label>Normal sessions/month <input name="frequency" type="number" min="1" value="4"></label>
-      <label>Sessions this month <input name="sessions" type="number" min="0" value="1"></label>
-      <label>Days since last session <input name="days" type="number" min="0" value="7"></label>
-      <label>Sessions remaining <input name="remaining" type="number" min="0" value="2"></label>
-      <label>Lead? <select name="lead"><option value="no">No</option><option value="yes">Yes</option></select></label>
+    <form method="dialog" id="clientForm" class="dialog-card">
+      <div class="dialog-head">
+        <div>
+          <div class="section-kicker">NEW CLIENT</div>
+          <h2>Add client</h2>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="Close">×</button>
+      </div>
+
+      <div class="form-grid">
+        <label>Name<input name="name" required placeholder="e.g. Sarah"></label>
+        <label>Phone<input name="phone" placeholder="+44 7…"></label>
+        <label>Package value (£)<input name="value" type="number" min="0" step="10" value="180"></label>
+        <label>Target sessions / month<input name="frequency" type="number" min="1" value="3"></label>
+        <label>Sessions remaining<input name="remaining" type="number" min="0" value="4"></label>
+        <label>Days since last session<input name="days" type="number" min="0" value="7"></label>
+        <label>Lead?<select name="lead"><option value="no">No</option><option value="yes">Yes</option></select></label>
+        <label>Follow-up due in days<input name="followUp" type="number" min="0" value="0"></label>
+      </div>
+
+      <label class="full-label">Notes<textarea name="notes" rows="3" placeholder="Anything useful about the client…"></textarea></label>
+
       <div class="dialog-actions">
-        <button type="button" id="cancelBtn">Cancel</button>
-        <button class="primary dark" type="submit">Add client</button>
+        <button class="btn btn-ghost" value="cancel">Cancel</button>
+        <button class="btn btn-primary" value="default">Add client</button>
       </div>
     </form>
   </dialog>
 
-  <div id="toast" class="toast" role="status"></div>
+  <dialog id="detailDialog"></dialog>
+
   <script src="app.js"></script>
 </body>
 </html>

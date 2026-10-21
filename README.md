@@ -1,25 +1,44 @@
-# PT Revenue Radar — MVP
+# PT Revenue Radar — Final
 
-This is a first clickable web MVP for validating the concept.
+A mobile-first static MVP for Personal Trainers.
 
-Included:
-- Dashboard
-- Client list
-- Risk detection
+## What is included
+
+- Daily revenue-opportunity dashboard
+- At-risk client detection
 - Renewal detection
 - Lead follow-up detection
-- Revenue-at-risk estimate
-- Add-client flow
-- AI message placeholder
-- Local browser storage
+- Frequency-drop detection
+- Search and filters
+- Client details
+- Recommended action
+- Ready-to-send WhatsApp message
+- Copy message / open WhatsApp
+- Mark follow-up done
+- Add and delete clients
+- Local data persistence
+- Export/import JSON backup
+- Installable PWA shell
+- Mobile responsive design
 
-This version intentionally does NOT connect to WhatsApp, payments, AI APIs, authentication or a database yet.
+## Important
 
-Suggested next build:
-1. Move data to Supabase/Postgres.
-2. Add login/authentication.
-3. Add real client/session history.
-4. Add AI-generated messages.
-5. Add WhatsApp integration.
-6. Add Stripe subscriptions.
-7. Deploy on Vercel/Cloudflare.
+This is the **final front-end MVP**. It runs entirely in the browser and stores data locally on the device.
+
+It is **not yet a cloud SaaS**: there is no user login, shared database, Stripe subscription or real OpenAI API connection. Those require a backend and are the next separate production stage.
+
+## GitHub Pages
+
+Upload/replace these files in your repository root:
+
+- index.html
+- styles.css
+- app.js
+- manifest.json
+- sw.js
+
+Then wait for GitHub Pages to rebuild.
+
+## Reset demo data
+
+Open browser storage for the site and remove the `ptrr_final_v1` localStorage key.
