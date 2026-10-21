@@ -358,6 +358,11 @@ window.detail = id => {
       ${sessionRows}
     </div>
 
+    <div style="margin-top:22px;padding-top:18px;border-top:1px solid #eee">
+      <button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteClient('${c.id}')">Delete client</button>
+      <div class="meta" style="margin-top:6px">This permanently deletes the client and all recorded sessions and follow-ups linked to them.</div>
+    </div>
+
     ${phone ? `
       <div style="margin-top:18px">
         <a class="primary" target="_blank"
@@ -371,6 +376,24 @@ window.detail = id => {
   `;
 
   $("detailDialog").showModal();
+};
+
+window.deleteClient = async clientId => {
+  const c = clients.find(x => x.id === clientId);
+  if (!c) return;
+
+  const confirmed = confirm(`Delete ${c.name} and all their sessions and follow-ups?\n\nThis cannot be undone.`);
+  if (!confirmed) return;
+
+  const { error } = await sb.rpc("delete_client_completely", { p_client_id: clientId });
+
+  if (error) {
+    alert("Could not delete client: " + error.message);
+    return;
+  }
+
+  $("detailDialog").close();
+  await load();
 };
 
 window.logSession = async clientId => {
