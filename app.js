@@ -477,7 +477,34 @@ async function load() {
 }
 
 function showAuth() { $("authView").classList.remove("hide"); $("appView").classList.add("hide"); }
-function showApp(s) { $("authView").classList.add("hide"); $("appView").classList.remove("hide"); $("userEmail").textContent = s.user.email || ""; showPage("dashboard"); load(); }
+
+async function setAccountBrand(user) {
+  let name = user?.user_metadata?.full_name?.trim() || "";
+  if (!name && sb && user?.id) {
+    try {
+      const { data } = await sb.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      name = data?.full_name?.trim() || "";
+    } catch (e) {
+      console.warn("Could not load profile name", e);
+    }
+  }
+  if (!name) {
+    const local = String(user?.email || "").split("@")[0].replace(/[._-]+/g, " ").trim();
+    name = local ? local.replace(/\b\w/g, ch => ch.toUpperCase()) : "Account";
+  }
+  const brand = `${name} Tracker`;
+  document.querySelectorAll("[data-brand-name]").forEach(el => { el.textContent = brand; });
+  document.title = brand;
+}
+
+function showApp(s) {
+  $("authView").classList.add("hide");
+  $("appView").classList.remove("hide");
+  $("userEmail").textContent = s.user.email || "";
+  setAccountBrand(s.user);
+  showPage("dashboard");
+  load();
+}
 
 async function start() {
   if (!sb) { showAuth(); $("authMsg").textContent = "Add your Publishable key to config.js first."; return; }
