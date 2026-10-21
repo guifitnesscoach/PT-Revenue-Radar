@@ -54,6 +54,12 @@ const PACKAGE_PRICES = {
   "12_dd": 1020
 };
 const packagePrice = value => PACKAGE_PRICES[value] ?? 0;
+const packageSessionRate = p => {
+  const info = packageInfo(p.package);
+  const total = packagePrice(p.package);
+  const totalSessions = Number(p.package_sessions || info?.sessions || 0);
+  return totalSessions > 0 ? total / totalSessions : 0;
+};
 const sessionsThisMonth = clientId => {
   const now = new Date();
   return sessionsForClient(clientId).filter(s => {
@@ -185,7 +191,7 @@ function remainingForPackage(p) {
 function clientPackageSummary(clientId) {
   const ps = packagesForClient(clientId);
   const remaining = ps.reduce((sum, p) => sum + remainingForPackage(p), 0);
-  const opportunity = ps.reduce((sum, p) => sum + remainingForPackage(p) * packagePrice(p.package), 0);
+  const opportunity = ps.reduce((sum, p) => sum + remainingForPackage(p) * packageSessionRate(p), 0);
   return { ps, remaining, opportunity };
 }
 
