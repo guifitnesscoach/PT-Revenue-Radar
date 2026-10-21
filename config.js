@@ -1,3 +1,4 @@
-// Paste your Supabase Publishable key below.
-// Do NOT use a secret/service_role key.
-window.PTRR_CONFIG={supabaseUrl:"https://jpsqjckfmrqvmdgrbqxn.supabase.co",supabasePublishableKey:"PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE"};
+window.PTRR_CONFIG = {
+  supabaseUrl: "https://xugfbzflwaatkfxxhhgx.supabase.co",
+  supabasePublishableKey: "sb_publishable_26ueSY-AxVV9b6-Xhk94oQ_8a6ifCug"
+};
