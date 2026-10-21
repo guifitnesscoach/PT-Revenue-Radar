@@ -10,6 +10,7 @@ let sessions = [];
 let packages = [];
 let activeClientId = null;
 let baseMonthlySalary = 0;
+let calendarDate = new Date();
 
 const money = n => new Intl.NumberFormat("en-GB", {
   style: "currency", currency: "GBP", maximumFractionDigits: 0
@@ -188,6 +189,74 @@ function analyse(c) {
   };
 }
 
+
+function dateKeyLocal(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function calendarSessionsForDay(key) {
+  return sessions
+    .filter(s => dateKeyLocal(s.session_date) === key)
+    .sort((a,b) => new Date(a.session_date) - new Date(b.session_date));
+}
+
+function renderCalendar() {
+  const grid = $("calendarGrid");
+  const monthLabel = $("calendarMonth");
+  if (!grid || !monthLabel) return;
+
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  monthLabel.textContent = new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+  const firstDay = new Date(year, month, 1);
+  const leading = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevMonthDays = new Date(year, month, 0).getDate();
+  const cells = [];
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const todayKey = dateKeyLocal(new Date());
+  const clientMap = new Map(clients.map(c => [c.id, c]));
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayOffset = i - leading + 1;
+    let cellDate;
+    let outside = false;
+    if (dayOffset < 1) {
+      cellDate = new Date(year, month - 1, prevMonthDays + dayOffset);
+      outside = true;
+    } else if (dayOffset > daysInMonth) {
+      cellDate = new Date(year, month + 1, dayOffset - daysInMonth);
+      outside = true;
+    } else {
+      cellDate = new Date(year, month, dayOffset);
+    }
+
+    const key = dateKeyLocal(cellDate);
+    const daySessions = calendarSessionsForDay(key);
+    const sessionHtml = daySessions.length
+      ? daySessions.map(s => {
+          const client = clientMap.get(s.client_id);
+          const name = client ? client.name : "Unknown client";
+          const time = new Date(s.session_date).toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+          return `<button type="button" class="calendar-session" onclick="detail('${s.client_id}')" title="${esc(name)} — ${time}"><span class="calendar-dot"></span><span class="calendar-session-name">${esc(name)}</span></button>`;
+        }).join("")
+      : `<div class="calendar-empty">${outside ? "" : "No sessions"}</div>`;
+
+    cells.push(`<div class="calendar-day${outside ? " outside" : ""}${key === todayKey ? " today" : ""}">
+      <div class="calendar-day-number">${cellDate.getDate()}</div>
+      <div class="calendar-sessions">${sessionHtml}</div>
+      ${daySessions.length > 1 ? `<div class="calendar-count">${daySessions.length} sessions</div>` : daySessions.length === 1 ? `<div class="calendar-count">1 session</div>` : ""}
+    </div>`);
+  }
+
+  grid.innerHTML = `<div class="calendar-weekdays">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => `<div>${d}</div>`).join("")}</div><div class="calendar-cells">${cells.join("")}</div>`;
+}
+
 function render() {
   const analysed = clients.map(c => ({ c, x: analyse(c) }));
   const risk = analysed.filter(x => x.x.score >= 3);
@@ -219,6 +288,7 @@ function render() {
     ? list.map(c => card(c, analyse(c))).join("")
     : `<div class="empty">No clients found.</div>`;
   renderSalaryPrediction();
+  renderCalendar();
 }
 
 function card(c, x) {
@@ -283,6 +353,9 @@ $("authForm").onsubmit = async e => {
 };
 
 $("logoutBtn").onclick=()=>sb.auth.signOut();
+$("calendarPrev").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
+$("calendarNext").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
+$("calendarToday").onclick=()=>{ const now=new Date(); calendarDate=new Date(now.getFullYear(),now.getMonth(),1); renderCalendar(); };
 $("search").oninput=render;
 $("addClientBtn").onclick=()=>{ $("clientForm").reset(); $("clientDialog").showModal(); };
 $("closeDialog").onclick=()=>$("clientDialog").close();

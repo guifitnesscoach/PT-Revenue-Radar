@@ -16,3 +16,10 @@ Included:
 - Mobile responsive layout
 
 IMPORTANT: Do NOT overwrite your existing `config.js`, because it contains your Supabase Publishable key. `config.js.example` is only a template.
+
+
+## v2 additions
+- Add Client is now inside the All Clients panel.
+- Monthly session calendar on the dashboard with previous/next month and Today controls.
+- Booked sessions are shown on each calendar day; clicking a session opens the client.
+- Existing config.js is intentionally not included in the ZIP; keep your current Supabase key.
