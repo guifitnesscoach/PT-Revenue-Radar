@@ -8,7 +8,10 @@ let mode = "login";
 let clients = [];
 let sessions = [];
 let packages = [];
+let prospects = [];
 let activeClientId = null;
+let activeProspectId = null;
+let clientTab = "active";
 let baseMonthlySalary = 0;
 let calendarDate = new Date();
 let salaryDate = new Date();
@@ -357,41 +360,82 @@ function render() {
   const analysed = clients.map(c => ({ c, x: analyse(c) }));
   const risk = analysed.filter(x => x.x.score >= 3);
   const opportunity = analysed.reduce((sum, x) => sum + x.x.opp, 0);
-
   const totalRemainingSessions = analysed.reduce((sum, x) => sum + x.x.remaining, 0);
-  $("stats").innerHTML = [
-    ["CLIENTS", clients.length],
-    ["AT RISK", risk.length],
-    ["FOLLOW-UPS", analysed.filter(x => x.x.score > 0).length],
-    ["REMAINING SESSIONS", totalRemainingSessions],
-    ["REVENUE OPPORTUNITY", money(opportunity)]
-  ].map(x => `<div class="stat"><div class="l">${x[0]}</div><div class="v">${x[1]}</div></div>`).join("");
+
+  const stats = $("stats");
+  if (stats) {
+    stats.innerHTML = [
+      ["CLIENTS", clients.length],
+      ["AT RISK", risk.length],
+      ["FOLLOW-UPS", analysed.filter(x => x.x.score > 0).length],
+      ["REMAINING SESSIONS", totalRemainingSessions],
+      ["REVENUE OPPORTUNITY", money(opportunity)]
+    ].map(x => `<div class="stat"><div class="l">${x[0]}</div><div class="v">${x[1]}</div></div>`).join("");
+  }
 
   const ranked = analysed.filter(x => x.x.score > 0)
     .sort((a,b) => b.x.score - a.x.score || b.x.opp - a.x.opp);
+  const priorityList = $("priorityList");
+  if (priorityList) {
+    priorityList.innerHTML = ranked.length
+      ? ranked.slice(0, 8).map(({c,x}) => card(c,x)).join("")
+      : `<div class="empty">No urgent opportunities right now. Nice work.</div>`;
+  }
 
-  $("priorityList").innerHTML = ranked.length
-    ? ranked.slice(0, 8).map(({c,x}) => card(c,x)).join("")
-    : `<div class="empty">No urgent opportunities right now. Nice work.</div>`;
-
-  const q = $("search").value.toLowerCase();
-  const list = clients.filter(c =>
-    c.name.toLowerCase().includes(q) ||
-    (c.phone || "").toLowerCase().includes(q) ||
-    (c.email || "").toLowerCase().includes(q)
-  );
-  $("clientList").innerHTML = list.length
-    ? list.map(c => card(c, analyse(c))).join("")
-    : `<div class="empty">No clients found.</div>`;
+  renderClients();
+  renderProspects();
   renderSalaryPrediction();
   renderCalendar();
+}
+
+function clientStatus(c) {
+  const x = analyse(c);
+  if (x.packageCount > 0 && x.remaining > 0) return "active";
+  return "not_active";
+}
+
+function renderClients() {
+  const listEl = $("clientList");
+  if (!listEl) return;
+  const q = ($("clientSearch")?.value || "").toLowerCase();
+  const filtered = clients.filter(c => {
+    const status = clientStatus(c);
+    const matchesTab = clientTab === "active" ? status === "active" : status === "not_active";
+    const hay = `${c.name || ""} ${c.phone || ""} ${c.email || ""}`.toLowerCase();
+    return matchesTab && hay.includes(q);
+  });
+  listEl.innerHTML = filtered.length
+    ? filtered.map(c => card(c, analyse(c))).join("")
+    : `<div class="empty">${clientTab === "active" ? "No active clients found." : "No inactive clients found."}</div>`;
+
+  $("activeClientCount")?.replaceChildren(document.createTextNode(String(clients.filter(c => clientStatus(c) === "active").length)));
+  $("notActiveClientCount")?.replaceChildren(document.createTextNode(String(clients.filter(c => clientStatus(c) === "not_active").length)));
+  document.querySelectorAll("[data-client-tab]").forEach(btn => btn.classList.toggle("active", btn.dataset.clientTab === clientTab));
+}
+
+function renderProspects() {
+  const wrap = $("prospectList");
+  if (!wrap) return;
+  const rows = prospects.filter(p => !p.converted_at);
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="empty">No prospect clients yet. Add your first lead from your Fitness Manager.</div>`;
+    return;
+  }
+  wrap.innerHTML = rows.map(pr => {
+    const contacted = !!pr.contacted_at;
+    const when = contacted ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet";
+    return `<div class="prospect-row">
+      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""} · ${esc(pr.source || "Fitness Manager")}</div><div class="meta">${contacted ? `Contacted ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
+      <div class="actions prospect-actions"><button class="ghost small" onclick="toggleProspectContact('${pr.id}')">${contacted ? "Update contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
+    </div>`;
+  }).join("");
 }
 
 function card(c, x) {
   return `<div class="client">
     <div>
       <div class="name">${esc(c.name)} ${x.score ? `<span class="badge">${x.score >= 4 ? "Priority" : "Follow-up"}</span>` : ""}</div>
-      <div class="meta">${c.phone ? esc(c.phone) : "No phone"} · ${c.email ? esc(c.email) : "No email"} · ${x.packageCount} package${x.packageCount === 1 ? "" : "s"} · ${x.remaining} sessions remaining · ${x.monthly} this month${c.lead_source ? ` · ${esc(c.lead_source)}` : ""}</div>
+      <div class="meta">${c.phone ? esc(c.phone) : "No phone"} · ${c.email ? esc(c.email) : "No email"} · ${x.packageCount} package${x.packageCount === 1 ? "" : "s"} · ${x.remaining} sessions remaining · ${x.monthly} this month${c.lead_source ? ` · ${esc(c.lead_source)}` : ""}${x.packageCount === 0 ? " · No package yet" : ""}</div>
       ${x.reasons.length ? `<div class="why"><b>Why:</b> ${esc(x.reasons.join(" · "))}</div>` : ""}
     </div>
     <div class="actions">
@@ -405,7 +449,7 @@ async function load() {
   if (!sb) return;
   const clientsResult = await sb.from("clients").select("*").order("created_at", { ascending: false });
   if (clientsResult.error) {
-    $("clientList").innerHTML = `<div class="empty">${esc(clientsResult.error.message)}</div>`;
+    console.error(clientsResult.error);
     return;
   }
 
@@ -413,6 +457,11 @@ async function load() {
   const clientIds = clients.map(c => c.id);
   sessions = [];
   packages = [];
+  prospects = [];
+
+  const prospectResult = await sb.from("prospects").select("*").is("converted_at", null).order("created_at", { ascending: false });
+  if (!prospectResult.error) prospects = prospectResult.data || [];
+  else console.error(prospectResult.error);
 
   if (clientIds.length) {
     const [sessionResult, packageResult] = await Promise.all([
@@ -452,6 +501,8 @@ $("logoutBtn").onclick=()=>sb.auth.signOut();
 
 const PAGE_META = {
   dashboard: { title: "Today's revenue opportunities" },
+  clients: { title: "Clients" },
+  prospects: { title: "Prospect Clients" },
   salary: { title: "Salary Calculator" },
   calendar: { title: "Sessions Calendar" }
 };
@@ -467,31 +518,36 @@ function openMenu() {
 }
 
 function showPage(page) {
-  const pages = { dashboard: $("dashboardPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
-  Object.entries(pages).forEach(([key, el]) => {
-    if (el) el.classList.toggle("hide", key !== page);
-  });
+  const pages = { dashboard: $("dashboardPage"), clients: $("clientsPage"), prospects: $("prospectsPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
+  Object.entries(pages).forEach(([key, el]) => { if (el) el.classList.toggle("hide", key !== page); });
   document.querySelectorAll(".menu-item").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
   const meta = PAGE_META[page] || PAGE_META.dashboard;
   if ($("pageTitle")) $("pageTitle").textContent = meta.title;
   closeMenu();
+  if (page === "clients") renderClients();
+  if (page === "prospects") renderProspects();
   if (page === "salary") renderSalaryPrediction();
   if (page === "calendar") renderCalendar();
 }
 
-document.querySelectorAll(".menu-item").forEach(btn => {
-  btn.onclick = () => showPage(btn.dataset.page);
-});
+document.querySelectorAll(".menu-item").forEach(btn => { btn.onclick = () => showPage(btn.dataset.page); });
 $("menuBtn").onclick = openMenu;
 $("closeMenu").onclick = closeMenu;
 $("menuBackdrop").onclick = closeMenu;
+
 $("calendarPrev").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
 $("calendarNext").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
 $("calendarToday").onclick=()=>{ const now=new Date(); calendarDayKey=null; calendarDate=new Date(now.getFullYear(),now.getMonth(),1); renderCalendar(); };
 $("calendarBackMonth").onclick=()=>{ calendarDayKey=null; renderCalendar(); };
-$("search").oninput=render;
-$("addClientBtn").onclick=()=>{ $("clientForm").reset(); $("clientDialog").showModal(); };
-$("closeDialog").onclick=()=>$("clientDialog").close();
+$("clientSearch")?.addEventListener("input", renderClients);
+$("addClientBtn")?.addEventListener("click", () => { $("clientForm").reset(); $("clientDialog").showModal(); });
+$("closeDialog").onclick=()=>$('clientDialog').close();
+document.querySelectorAll("[data-client-tab]").forEach(btn => btn.addEventListener("click", () => { clientTab = btn.dataset.clientTab; renderClients(); }));
+$("addProspectBtn")?.addEventListener("click", () => { $("prospectForm").reset(); $("prospectMsg").textContent=""; $("prospectDialog").showModal(); });
+$("closeProspectDialog")?.addEventListener("click", () => $("prospectDialog").close());
+$("exportProspectsBtn")?.addEventListener("click", exportProspectsCsv);
+$("importProspectsBtn")?.addEventListener("click", () => $("prospectImportFile")?.click());
+$("prospectImportFile")?.addEventListener("change", handleProspectImport);
 
 $("clientForm").onsubmit=async e=>{
   e.preventDefault();
@@ -508,6 +564,157 @@ $("clientForm").onsubmit=async e=>{
   const {error}=await sb.from("clients").insert(payload);
   if(error){$("clientMsg").textContent=error.message;return;}
   $("clientDialog").close(); await load();
+};
+
+$("prospectForm").onsubmit=async e=>{
+  e.preventDefault();
+  const {data:{user}}=await sb.auth.getUser();
+  const payload={user_id:user.id,name:$("prName").value.trim(),email:$("prEmail").value.trim(),phone:$("prPhone").value.trim()||null,source:"Fitness Manager",notes:$("prNotes").value.trim()||null};
+  const {error}=await sb.from("prospects").insert(payload);
+  if(error){$("prospectMsg").textContent=error.message;return;}
+  $("prospectDialog").close(); await load(); showPage("prospects");
+};
+
+async function handleProspectImport(e){
+  const file=e.target.files?.[0];
+  if(!file)return;
+  const input=e.target;
+  try{
+    const buf=await file.arrayBuffer();
+    let rows=[];
+    const lower=file.name.toLowerCase();
+    if(lower.endsWith(".csv")){
+      const text=new TextDecoder("utf-8").decode(buf);
+      rows=parseCsv(text);
+    }else{
+      if(!window.XLSX) throw new Error("Spreadsheet reader is still loading. Please try again.");
+      const wb=XLSX.read(buf,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+    }
+    const normalised=normaliseProspectRows(rows);
+    if(!normalised.length){
+      alert("No valid prospects found. The spreadsheet needs Name and Email columns.");
+      return;
+    }
+    const existingEmails=new Set(prospects.filter(p=>!p.converted_at).map(p=>String(p.email||"").trim().toLowerCase()).filter(Boolean));
+    const {data:{user}}=await sb.auth.getUser();
+    const unique=[];
+    const seen=new Set(existingEmails);
+    for(const row of normalised){
+      const email=row.email.toLowerCase();
+      if(seen.has(email)) continue;
+      seen.add(email);
+      unique.push({user_id:user.id,name:row.name,email:row.email,phone:row.phone||null,source:"Fitness Manager",notes:row.notes||null});
+    }
+    if(!unique.length){
+      alert("No new prospects were imported. All emails already exist in your prospect list.");
+      return;
+    }
+    let inserted=0;
+    for(let i=0;i<unique.length;i+=100){
+      const chunk=unique.slice(i,i+100);
+      const {error}=await sb.from("prospects").insert(chunk);
+      if(error) throw error;
+      inserted+=chunk.length;
+    }
+    await load();
+    showPage("prospects");
+    alert(`${inserted} prospect${inserted===1?"":"s"} imported successfully.`);
+  }catch(err){
+    console.error(err);
+    alert("Could not import the spreadsheet: "+(err?.message||err));
+  }finally{
+    input.value="";
+  }
+}
+
+function normaliseProspectRows(rows){
+  return (rows||[]).map(row=>{
+    const keys=Object.keys(row||{});
+    const find=(names)=>{
+      const key=keys.find(k=>names.includes(String(k).trim().toLowerCase()));
+      return key==null?"":String(row[key]??"").trim();
+    };
+    const name=find(["name","full name","full_name","client name","client"]);
+    const email=find(["email","e-mail","email address","email_address"]);
+    const phone=find(["phone","telephone","mobile","phone number"]);
+    const notes=find(["notes","note"]);
+    return {name,email,phone,notes};
+  }).filter(r=>r.name && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email));
+}
+
+function parseCsv(text){
+  const lines=[]; let row=[]; let cell=""; let quoted=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i], next=text[i+1];
+    if(quoted){
+      if(ch==='"' && next==='"'){cell+='"';i++;}
+      else if(ch==='"') quoted=false;
+      else cell+=ch;
+    }else if(ch==='"') quoted=true;
+    else if(ch===','){row.push(cell);cell="";}
+    else if(ch==='\n'){row.push(cell);lines.push(row);row=[];cell="";}
+    else if(ch!=='\r') cell+=ch;
+  }
+  if(cell!=="" || row.length){row.push(cell);lines.push(row);}
+  if(!lines.length)return [];
+  const headers=lines[0].map(x=>String(x).trim());
+  return lines.slice(1).filter(r=>r.some(x=>String(x).trim())).map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]??""])));
+}
+
+function exportProspectsCsv(){
+  const rows=prospects.filter(p=>!p.converted_at);
+  const header=["Name","Email","Phone","Source","Contacted","Contacted At"];
+  const csv=[header,...rows.map(p=>[p.name,p.email,p.phone||"",p.source||"Fitness Manager",p.contacted_at?"Yes":"No",p.contacted_at?new Date(p.contacted_at).toLocaleString("en-GB"):""])].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`prospect-clients-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+window.toggleProspectContact=async id=>{
+  const p=prospects.find(x=>x.id===id); if(!p)return;
+  const next=new Date().toISOString();
+  const {error}=await sb.from("prospects").update({contacted_at:next}).eq("id",id);
+  if(error){alert(error.message);return;} await load(); showPage("prospects");
+};
+
+window.deleteProspect=async id=>{
+  const p=prospects.find(x=>x.id===id); if(!p)return;
+  if(!confirm(`Delete prospect ${p.name}?\n\nThis cannot be undone.`))return;
+  const {error}=await sb.from("prospects").delete().eq("id",id);
+  if(error){alert(error.message);return;} await load(); showPage("prospects");
+};
+
+window.convertProspect=id=>{
+  const p=prospects.find(x=>x.id===id); if(!p)return;
+  activeProspectId=id;
+  $("convertProspectName").textContent=p.name;
+  $("prospectPackageForm").reset();
+  $("prPackagePurchasedAt").value=new Date().toISOString().slice(0,10);
+  $("prospectPackageMsg").textContent="";
+  $("prospectPackageDialog").showModal();
+};
+
+$("closeProspectPackageDialog")?.addEventListener("click",()=>$("prospectPackageDialog").close());
+const prospectPackageSelect=$("prPackage");
+prospectPackageSelect?.addEventListener("change",()=>{
+  const value=prospectPackageSelect.value, info=packageInfo(value), price=packagePrice(value);
+  if($("prPackageValue")) $("prPackageValue").value=info?price.toFixed(2):"";
+  if($("prPackageRate")) $("prPackageRate").textContent=info?`${info.sessions} session${info.sessions===1?"":"s"} · ${money(price/info.sessions)} per session`:"Select a package to calculate the price automatically.";
+});
+
+$("prospectPackageForm").onsubmit=async e=>{
+  e.preventDefault();
+  const p=prospects.find(x=>x.id===activeProspectId); if(!p)return;
+  const opt=$("prPackage").selectedOptions[0]; if(!opt)return;
+  const {data:{user}}=await sb.auth.getUser();
+  const {data:client,error:clientError}=await sb.from("clients").insert({user_id:user.id,name:p.name,email:p.email,phone:p.phone||null,lead_source:"Fitness Manager",lead:true,notes:p.notes||null}).select().single();
+  if(clientError){$("prospectPackageMsg").textContent=clientError.message;return;}
+  const {error:packageError}=await sb.from("packages").insert({user_id:user.id,client_id:client.id,package:$("prPackage").value,package_sessions:Number(opt.dataset.sessions||0),package_value:packagePrice($("prPackage").value),monthly:opt.dataset.monthly==="true",purchased_at:new Date($("prPackagePurchasedAt").value+"T12:00:00").toISOString()});
+  if(packageError){await sb.from("clients").delete().eq("id",client.id);$("prospectPackageMsg").textContent=packageError.message;return;}
+  const {error:prospectError}=await sb.from("prospects").update({converted_client_id:client.id,converted_at:new Date().toISOString()}).eq("id",p.id);
+  if(prospectError){$("prospectPackageMsg").textContent=prospectError.message;return;}
+  $("prospectPackageDialog").close(); activeProspectId=null; await load(); showPage("clients"); clientTab="active"; renderClients(); detail(client.id);
 };
 
 function packageRemainingLabel(p) { return `${remainingForPackage(p)} remaining`; }

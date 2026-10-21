@@ -120,3 +120,16 @@
   .day-hour-label{font-size:11px;padding-right:7px}
   .day-session-block{padding:8px;font-size:13px}
 }
+
+
+/* Clients & prospects */
+.client-tabs{display:flex;gap:8px;border-bottom:1px solid #e5e7eb;margin-bottom:14px;overflow:auto}
+.client-tab{border:0;background:transparent;padding:10px 12px;color:#6b7280;font-weight:800;border-bottom:2px solid transparent;white-space:nowrap}
+.client-tab.active{color:#111827;border-bottom-color:#111827}
+.client-tab span{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:#f3f4f6;font-size:10px;margin-left:4px}
+.client-tab.active span{background:#111827;color:#fff}
+.clients-search{margin-bottom:10px}
+.prospect-tools{display:flex;gap:8px;align-items:center}
+.prospect-row{border:1px solid #e5e7eb;border-radius:13px;padding:14px;margin:9px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.prospect-main{min-width:0}.prospect-actions{flex-wrap:wrap;justify-content:flex-end}.danger{color:#b91c1c!important;border-color:#fecaca!important}
+@media(max-width:700px){.prospect-row{flex-direction:column;align-items:stretch}.prospect-actions{justify-content:flex-start}.prospect-tools{flex-wrap:wrap;justify-content:flex-end}}

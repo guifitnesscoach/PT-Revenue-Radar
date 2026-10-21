@@ -1,9 +1,18 @@
-# PT Revenue Radar – Salary Prediction v5
+# PT Revenue Radar — Salary Prediction v7
 
-Adds session time booking and double-booking protection.
+This version keeps the existing Supabase setup and adds:
 
-- Choose date and time when logging a session.
-- Calendar displays the session time and client.
-- The app blocks an already-booked date/time before saving.
-- Supabase also enforces the same date/time conflict at database level.
-- Keep your existing `config.js`; do not replace it with `config.js.example`.
+- Clients moved into the main menu.
+- Active Clients / Not Active tabs.
+- Prospect Clients area for Fitness Manager leads.
+- Prospect contact tracking with contacted date/time.
+- Add prospect, delete prospect, and export prospects to CSV.
+- Add package & convert a prospect into a client in one flow.
+- Converted prospects become normal clients with an active package.
+- Salary Calculator, Sessions Calendar, daily calendar breakdown, package management and session time booking retained.
+
+IMPORTANT: keep your existing `config.js` with your Supabase URL and Publishable Key. Do not replace it with `config.js.example`.
+
+
+## Prospect spreadsheet import
+The Prospect Clients page supports importing CSV, XLSX, and XLS files. Use columns named Name and Email; Phone and Notes are optional. Duplicate prospect emails are skipped. Imported prospects are saved as Fitness Manager leads and do not create client accounts until converted with a package.
