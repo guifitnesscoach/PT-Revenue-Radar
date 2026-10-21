@@ -441,6 +441,7 @@ function card(c, x) {
     <div class="actions">
       <button class="ghost small" onclick="detail('${c.id}')">View</button>
       ${c.phone ? `<a class="ghost small" target="_blank" href="https://wa.me/${String(c.phone).replace(/\D/g,"")}">WhatsApp</a>` : ""}
+      ${c.email ? `<a class="ghost small" href="mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + (c.name || "") + ",\n\nJust checking in to see how your training is going.\n\nBest,\nGui")}">Email</a>` : ""}
     </div>
   </div>`;
 }
