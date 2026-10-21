@@ -25,8 +25,8 @@ const packagesForClient = clientId => packages
   .sort((a,b) => new Date(b.purchased_at) - new Date(a.purchased_at));
 
 const PACKAGE_OPTIONS = [
-  { value: "1_session_pack", label: "1 session pack", sessions: 1, monthly: false },
   { value: "complimentary_session", label: "Complimentary session", sessions: 1, monthly: false },
+  { value: "1_session_pack", label: "1 session pack", sessions: 1, monthly: false },
   { value: "10_sessions_pack", label: "10 sessions pack", sessions: 10, monthly: false },
   { value: "20_sessions_pack", label: "20 sessions pack", sessions: 20, monthly: false },
   { value: "4_dd", label: "4 sessions by Direct Debit", sessions: 4, monthly: true },
@@ -226,7 +226,7 @@ window.detail = id => {
   const c=clients.find(x=>x.id===id); if(!c)return;
   activeClientId=id;
   const x=analyse(c), ps=packagesForClient(c.id), clientSessions=sessionsForClient(c.id), phone=(c.phone||"").replace(/\D/g,"");
-  const sessionRows=clientSessions.length ? clientSessions.slice(0,10).map(s=>`<div class="meta" style="padding:8px 0;border-bottom:1px solid #eee">${new Date(s.session_date).toLocaleDateString("en-GB")}${s.notes?` · ${esc(s.notes)}`:""}</div>`).join("") : `<div class="empty">No sessions logged yet.</div>`;
+  const sessionRows=clientSessions.length ? clientSessions.slice(0,10).map(s=>`<div style="padding:10px 0;border-bottom:1px solid #eee"><div class="meta">${new Date(s.session_date).toLocaleDateString("en-GB")}${s.notes?` · ${esc(s.notes)}`:""}</div><div style="margin-top:6px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deleteSession(\'${s.id}\', \'${c.id}\')">Delete session</button></div></div>`).join("") : `<div class="empty">No sessions logged yet.</div>`;
   const packageRows=ps.length ? ps.map(p=>`<div style="padding:12px 0;border-bottom:1px solid #eee"><div><b>${esc(packageInfo(p.package)?.label||p.package)}</b> · ${money(p.package_value)}</div><div class="meta">Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div><div style="margin-top:8px"><button class="ghost small" style="color:#b91c1c;border-color:#fecaca" onclick="deletePackage('${p.id}')">Delete package</button></div></div>`).join("") : `<div class="empty">No packages purchased yet.</div>`;
   const packageSelect=ps.filter(p=>remainingForPackage(p)>0).map(p=>`<option value="${p.id}">${esc(packageInfo(p.package)?.label||p.package)} · ${money(p.package_value)} · ${remainingForPackage(p)} remaining</option>`).join("");
 
@@ -326,6 +326,17 @@ window.deletePackage=async packageId=>{
   if(error){alert("Could not delete package: "+error.message);return;}
   await load();
   if(activeClientId && $("detailDialog")?.open) detail(activeClientId);
+};
+
+window.deleteSession=async (sessionId, clientId)=>{
+  const s=sessions.find(x=>x.id===sessionId);
+  if(!s)return;
+  const date=new Date(s.session_date).toLocaleDateString("en-GB");
+  if(!confirm(`Delete the session booked for ${date}?\n\nThis will return the session to the package and cannot be undone.`))return;
+  const {error}=await sb.from("sessions").delete().eq("id",sessionId);
+  if(error){alert("Could not delete session: "+error.message);return;}
+  await load();
+  if(activeClientId && $("detailDialog")?.open) detail(clientId || activeClientId);
 };
 
 window.deleteClient=async clientId=>{
