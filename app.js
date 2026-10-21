@@ -343,7 +343,7 @@ async function load() {
 }
 
 function showAuth() { $("authView").classList.remove("hide"); $("appView").classList.add("hide"); }
-function showApp(s) { $("authView").classList.add("hide"); $("appView").classList.remove("hide"); $("userEmail").textContent = s.user.email || ""; load(); }
+function showApp(s) { $("authView").classList.add("hide"); $("appView").classList.remove("hide"); $("userEmail").textContent = s.user.email || ""; showPage("dashboard"); load(); }
 
 async function start() {
   if (!sb) { showAuth(); $("authMsg").textContent = "Add your Publishable key to config.js first."; return; }
@@ -365,6 +365,42 @@ $("authForm").onsubmit = async e => {
 };
 
 $("logoutBtn").onclick=()=>sb.auth.signOut();
+
+const PAGE_META = {
+  dashboard: { title: "Today's revenue opportunities" },
+  salary: { title: "Salary Calculator" },
+  calendar: { title: "Sessions Calendar" }
+};
+
+function closeMenu() {
+  $("sideMenu")?.classList.remove("open");
+  $("menuBackdrop")?.classList.add("hide");
+}
+
+function openMenu() {
+  $("sideMenu")?.classList.add("open");
+  $("menuBackdrop")?.classList.remove("hide");
+}
+
+function showPage(page) {
+  const pages = { dashboard: $("dashboardPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
+  Object.entries(pages).forEach(([key, el]) => {
+    if (el) el.classList.toggle("hide", key !== page);
+  });
+  document.querySelectorAll(".menu-item").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
+  const meta = PAGE_META[page] || PAGE_META.dashboard;
+  if ($("pageTitle")) $("pageTitle").textContent = meta.title;
+  closeMenu();
+  if (page === "salary") renderSalaryPrediction();
+  if (page === "calendar") renderCalendar();
+}
+
+document.querySelectorAll(".menu-item").forEach(btn => {
+  btn.onclick = () => showPage(btn.dataset.page);
+});
+$("menuBtn").onclick = openMenu;
+$("closeMenu").onclick = closeMenu;
+$("menuBackdrop").onclick = closeMenu;
 $("calendarPrev").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
 $("calendarNext").onclick=()=>{ calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
 $("calendarToday").onclick=()=>{ const now=new Date(); calendarDate=new Date(now.getFullYear(),now.getMonth(),1); renderCalendar(); };
