@@ -92,7 +92,7 @@ function analyse(c) {
   return {
     score,
     reasons,
-    opp: Number(c.package_value || 0),
+    opp: remaining * Number(c.package_value || 0),
     monthly,
     remaining,
     latestSession: lastSessionDate,
@@ -103,7 +103,7 @@ function analyse(c) {
 function render() {
   const analysed = clients.map(c => ({ c, x: analyse(c) }));
   const risk = analysed.filter(x => x.x.score >= 3);
-  const opportunity = risk.reduce((sum, x) => sum + x.x.opp, 0);
+  const opportunity = a.reduce((sum, x) => sum + x.x.opp, 0);
 
   $("stats").innerHTML = [
     ["CLIENTS", clients.length],
