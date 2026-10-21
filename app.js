@@ -477,7 +477,24 @@ async function load() {
   render();
 }
 
-function showAuth() { $("authView").classList.remove("hide"); $("appView").classList.add("hide"); }
+function showAuth() {
+  $("authView").classList.remove("hide");
+  $("appView").classList.add("hide");
+  $("authForm")?.classList.remove("hide");
+  $("resetPasswordForm")?.classList.add("hide");
+}
+
+function showResetPassword() {
+  $("authView").classList.remove("hide");
+  $("appView").classList.add("hide");
+  $("authForm")?.classList.add("hide");
+  $("resetPasswordForm")?.classList.remove("hide");
+  $("resetMsg").textContent = "";
+}
+
+function authRedirectUrl() {
+  return window.location.origin + window.location.pathname;
+}
 
 async function setAccountBrand(user) {
   let name = user?.user_metadata?.full_name?.trim() || "";
@@ -511,7 +528,16 @@ async function start() {
   if (!sb) { showAuth(); $("authMsg").textContent = "Add your Publishable key to config.js first."; return; }
   const { data: { session } } = await sb.auth.getSession();
   session ? showApp(session) : showAuth();
-  sb.auth.onAuthStateChange((_e, s) => s ? showApp(s) : showAuth());
+  sb.auth.onAuthStateChange((event, s) => {
+    if (event === "PASSWORD_RECOVERY") {
+      showResetPassword();
+      return;
+    }
+    if (s) showApp(s); else showAuth();
+  });
+
+  // Supabase may return to the app with a recovery hash before the auth event fires.
+  if (window.location.hash.includes("type=recovery")) showResetPassword();
 }
 
 $("loginTab").onclick = () => { mode="login"; $("loginTab").classList.add("active"); $("signupTab").classList.remove("active"); $("nameWrap").classList.add("hide"); $("authSubmit").textContent="Log in"; };
@@ -524,6 +550,44 @@ $("authForm").onsubmit = async e => {
     const {error}=await sb.auth.signUp({email,password,options:{data:{full_name:$("fullName").value.trim()}}});
     $("authMsg").textContent=error?error.message:"Account created. Check your email if confirmation is enabled.";
   } else { const {error}=await sb.auth.signInWithPassword({email,password}); if(error) $("authMsg").textContent=error.message; }
+};
+
+$("forgotPasswordBtn").onclick = async () => {
+  if (!sb) return;
+  const email = $("email").value.trim();
+  $("authMsg").textContent = "";
+  if (!email) {
+    $("authMsg").textContent = "Enter your email address first.";
+    $("email").focus();
+    return;
+  }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
+  $("authMsg").textContent = error
+    ? error.message
+    : "If an account exists for this email, you will receive a password reset email shortly.";
+};
+
+$("resetPasswordForm").onsubmit = async e => {
+  e.preventDefault();
+  if (!sb) return;
+  const password = $("newPassword").value;
+  const confirm = $("confirmPassword").value;
+  $("resetMsg").textContent = "";
+  if (password !== confirm) {
+    $("resetMsg").textContent = "Passwords do not match.";
+    return;
+  }
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) {
+    $("resetMsg").textContent = error.message;
+    return;
+  }
+  $("resetMsg").textContent = "Password updated successfully. You can now log in with your new password.";
+  setTimeout(async () => {
+    await sb.auth.signOut();
+    window.location.hash = "";
+    showAuth();
+  }, 900);
 };
 
 $("logoutBtn").onclick=()=>sb.auth.signOut();
