@@ -12,6 +12,7 @@ let prospects = [];
 let activeClientId = null;
 let activePackageId = null;
 let activeProspectId = null;
+let activeSessionId = null;
 let clientTab = "active";
 let baseMonthlySalary = 0;
 let calendarDate = new Date();
@@ -436,13 +437,11 @@ function card(c, x) {
   return `<div class="client">
     <div>
       <div class="name">${esc(c.name)} ${x.score ? `<span class="badge">${x.score >= 4 ? "Priority" : "Follow-up"}</span>` : ""}</div>
-      <div class="meta">${c.phone ? esc(c.phone) : "No phone"} · ${c.email ? esc(c.email) : "No email"} · ${x.packageCount} package${x.packageCount === 1 ? "" : "s"} · ${x.remaining} sessions remaining · ${x.monthly} this month${c.lead_source ? ` · ${esc(c.lead_source)}` : ""}${x.packageCount === 0 ? " · No package yet" : ""}</div>
+      <div class="meta">${x.packageCount} package${x.packageCount === 1 ? "" : "s"} · ${x.remaining} sessions remaining · ${x.monthly} this month${c.lead_source ? ` · ${esc(c.lead_source)}` : ""}${x.packageCount === 0 ? " · No package yet" : ""}</div>
       ${x.reasons.length ? `<div class="why"><b>Why:</b> ${esc(x.reasons.join(" · "))}</div>` : ""}
     </div>
     <div class="actions">
       <button class="ghost small" onclick="detail('${c.id}')">View</button>
-      ${c.phone ? `<a class="ghost small" target="_blank" href="https://wa.me/${String(c.phone).replace(/\D/g,"")}">WhatsApp</a>` : ""}
-      ${c.email ? `<a class="ghost small" href="mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((c.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\'re well.\n\nThank you\nGui")}">Email</a>` : ""}
     </div>
   </div>`;
 }
@@ -839,6 +838,8 @@ function renderClientDetail(id) {
     <div class="client-detail-top">
       <button class="ghost small" onclick="showPage('clients')">← Back to Clients</button>
       <div class="client-detail-actions">
+        ${c.phone ? `<a class="ghost small" target="_blank" href="https://wa.me/${String(c.phone).replace(/\D/g,"")}">WhatsApp</a>` : ""}
+        ${c.email ? `<a class="ghost small" href="mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((c.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\'re well.\n\nThank you\nGui")}">Email</a>` : ""}
         <button class="ghost small" onclick="toggleClientEdit()">Edit details</button>
         <button class="ghost small danger" onclick="deleteClient('${c.id}')">Delete client</button>
       </div>
@@ -906,7 +907,7 @@ function renderPackageDetail(packageId) {
   const linkedSessions = sessions.filter(s => s.package_id === p.id).sort((a,b) => new Date(b.session_date) - new Date(a.session_date));
   const rows = linkedSessions.length ? linkedSessions.map(s => {
     const dt = new Date(s.session_date);
-    return `<div class="session-row"><div><div class="name">${dt.toLocaleDateString("en-GB")} · ${dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}</div><button class="ghost small danger" onclick="deleteSession('${s.id}', '${c.id}')">Delete</button></div>`;
+    return `<div class="session-row"><div><div class="name">${dt.toLocaleDateString("en-GB")} · ${dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}</div><div class="actions"><button class="ghost small" onclick="openEditSession('${s.id}')">Edit</button><button class="ghost small danger" onclick="deleteSession('${s.id}', '${c.id}')">Delete</button></div></div>`;
   }).join("") : `<div class="empty">No sessions booked for this package yet.</div>`;
 
   $("pageTitle").textContent = info?.label || "Package";
@@ -1073,6 +1074,57 @@ window.deletePackage=async packageId=>{
   if (activePackageId === packageId) { activePackageId = null; showPage("clientDetail"); return; }
   if(activeClientId) renderClientDetail(activeClientId);
 };
+
+window.openEditSession = sessionId => {
+  const s = sessions.find(x => x.id === sessionId);
+  if (!s) return;
+  activeSessionId = sessionId;
+  const dt = new Date(s.session_date);
+  const localDate = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+  const localTime = `${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`;
+  const client = clients.find(c => c.id === s.client_id);
+  const p = packages.find(x => x.id === s.package_id);
+  $("editSessionTitle").textContent = client?.name || "Session";
+  $("editSessionPackage").textContent = p ? (packageInfo(p.package)?.label || p.package) : "Package";
+  $("editSessionDate").value = localDate;
+  $("editSessionTime").value = localTime;
+  $("editSessionNotes").value = s.notes || "";
+  $("editSessionMsg").textContent = "";
+  $("editSessionDialog").showModal();
+};
+
+$("closeEditSessionDialog")?.addEventListener("click", () => {
+  activeSessionId = null;
+  $("editSessionDialog")?.close();
+});
+
+$("editSessionForm")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!activeSessionId) return;
+  const msg = $("editSessionMsg");
+  msg.textContent = "Saving...";
+  const s = sessions.find(x => x.id === activeSessionId);
+  if (!s) { msg.textContent = "Session not found."; return; }
+  const dateValue = $("editSessionDate").value;
+  const timeValue = $("editSessionTime").value;
+  const notesValue = $("editSessionNotes").value.trim() || null;
+  if (!dateValue || !timeValue) { msg.textContent = "Please choose a date and time."; return; }
+  const nextDateTime = new Date(`${dateValue}T${timeValue}:00`);
+  if (Number.isNaN(nextDateTime.getTime())) { msg.textContent = "Please choose a valid date and time."; return; }
+  const clash = sessions.find(x => x.id !== activeSessionId && new Date(x.session_date).getTime() === nextDateTime.getTime());
+  if (clash) {
+    const clashClient = clients.find(c => c.id === clash.client_id);
+    msg.textContent = `That time is already booked with ${clashClient?.name || "another client"}. Please choose another time.`;
+    return;
+  }
+  const { error } = await sb.from("sessions").update({ session_date: nextDateTime.toISOString(), notes: notesValue }).eq("id", activeSessionId);
+  if (error) { msg.textContent = error.message; return; }
+  const packageId = s.package_id;
+  $("editSessionDialog").close();
+  activeSessionId = null;
+  await load();
+  if (packageId && packages.some(p => p.id === packageId)) renderPackageDetail(packageId);
+});
 
 window.deleteSession=async (sessionId, clientId)=>{
   const s=sessions.find(x=>x.id===sessionId);
