@@ -10,6 +10,7 @@ let sessions = [];
 let packages = [];
 let prospects = [];
 let activeClientId = null;
+let activePackageId = null;
 let activeProspectId = null;
 let clientTab = "active";
 let baseMonthlySalary = 0;
@@ -546,7 +547,7 @@ function openMenu() {
 }
 
 function showPage(page) {
-  const pages = { dashboard: $("dashboardPage"), clients: $("clientsPage"), clientDetail: $("clientDetailPage"), prospects: $("prospectsPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
+  const pages = { dashboard: $("dashboardPage"), clients: $("clientsPage"), clientDetail: $("clientDetailPage"), packageDetail: $("packageDetailPage"), prospects: $("prospectsPage"), salary: $("salaryPage"), calendar: $("calendarPage") };
   Object.entries(pages).forEach(([key, el]) => { if (el) el.classList.toggle("hide", key !== page); });
   document.querySelectorAll(".menu-item").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
   const meta = PAGE_META[page] || PAGE_META.dashboard;
@@ -554,6 +555,7 @@ function showPage(page) {
   closeMenu();
   if (page === "clients") renderClients();
   if (page === "clientDetail" && activeClientId) renderClientDetail(activeClientId);
+  if (page === "packageDetail" && activePackageId) renderPackageDetail(activePackageId);
   if (page === "prospects") renderProspects();
   if (page === "salary") renderSalaryPrediction();
   if (page === "calendar") renderCalendar();
@@ -755,13 +757,18 @@ function renderClientDetail(id) {
   if (!c) return;
   activeClientId = id;
   const x = analyse(c), ps = packagesForClient(c.id), clientSessions = sessionsForClient(c.id);
-  const packageRows = ps.length ? ps.map(p => `<div class="package-card">
+  const packageRows = ps.length ? ps.map(p => {
+    const remaining = remainingForPackage(p);
+    const clickable = remaining > 0;
+    return `<div class="package-card ${clickable ? "package-clickable" : "package-inactive"}" ${clickable ? `onclick="openPackage('${p.id}')" role="button" tabindex="0"` : ""}>
       <div class="package-card-main">
         <div class="name">${esc(packageInfo(p.package)?.label || p.package)}</div>
         <div class="meta">${money(p.package_value)} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")} · ${packageRemainingLabel(p)}</div>
+        ${clickable ? `<div class="package-link-hint">Open package → book & view sessions</div>` : `<div class="package-link-hint muted">Package completed</div>`}
       </div>
-      <button class="ghost small danger" onclick="deletePackage('${p.id}')">Delete package</button>
-    </div>`).join("") : `<div class="empty">No packages purchased yet.</div>`;
+      <button class="ghost small danger package-delete-btn" onclick="event.stopPropagation(); deletePackage('${p.id}')">Delete package</button>
+    </div>`;
+  }).join("") : `<div class="empty">No packages purchased yet.</div>`;
 
   const sessionRows = clientSessions.length ? clientSessions.slice(0, 20).map(s => {
     const dt = new Date(s.session_date);
@@ -847,6 +854,77 @@ function renderClientDetail(id) {
 
   $("clientDetailsForm")?.addEventListener("submit", saveClientDetails);
 }
+
+function renderPackageDetail(packageId) {
+  const p = packages.find(x => x.id === packageId);
+  if (!p) { showPage("clientDetail"); return; }
+  const c = clients.find(x => x.id === p.client_id);
+  if (!c) { showPage("clients"); return; }
+  activePackageId = packageId;
+  activeClientId = c.id;
+  const info = packageInfo(p.package);
+  const remaining = remainingForPackage(p);
+  const linkedSessions = sessions.filter(s => s.package_id === p.id).sort((a,b) => new Date(b.session_date) - new Date(a.session_date));
+  const rows = linkedSessions.length ? linkedSessions.map(s => {
+    const dt = new Date(s.session_date);
+    return `<div class="session-row"><div><div class="name">${dt.toLocaleDateString("en-GB")} · ${dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>${s.notes ? `<div class="meta">${esc(s.notes)}</div>` : ""}</div><button class="ghost small danger" onclick="deleteSession('${s.id}', '${c.id}')">Delete</button></div>`;
+  }).join("") : `<div class="empty">No sessions booked for this package yet.</div>`;
+
+  $("pageTitle").textContent = info?.label || "Package";
+  $("packageDetailContent").innerHTML = `
+    <div class="client-detail-top">
+      <button class="ghost small" onclick="showPage('clientDetail')">← Back to ${esc(c.name)}</button>
+      <button class="ghost small danger" onclick="deletePackage('${p.id}')">Delete package</button>
+    </div>
+    <div class="client-hero package-hero">
+      <div><div class="eyebrow">PACKAGE</div><h2>${esc(info?.label || p.package)}</h2><div class="meta">Client: ${esc(c.name)} · Purchased ${new Date(p.purchased_at).toLocaleDateString("en-GB")}</div></div>
+    </div>
+    <div class="package-summary-grid">
+      <div class="info-card"><div class="l">PACKAGE VALUE</div><div class="v">${money(p.package_value)}</div></div>
+      <div class="info-card"><div class="l">TOTAL SESSIONS</div><div class="v">${p.package_sessions}</div></div>
+      <div class="info-card"><div class="l">SESSIONS BOOKED</div><div class="v">${linkedSessions.length}</div></div>
+      <div class="info-card"><div class="l">SESSIONS REMAINING</div><div class="v">${remaining}</div></div>
+    </div>
+    <div class="detail-section">
+      <div class="section-head"><div><div class="eyebrow">SESSIONS</div><h3>Book a session for this package</h3></div></div>
+      ${remaining > 0 ? `<div class="session-datetime"><label>Date<input id="packageSessionDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></label><label>Time<input id="packageSessionTime" type="time" step="900" value="09:00" required></label></div>
+      <div class="meta">The same time cannot be booked twice on the same day.</div>
+      <label>Notes<textarea id="packageSessionNotes" rows="2" placeholder="Optional"></textarea></label>
+      <div id="packageSessionMsg" class="msg"></div>
+      <button class="primary" onclick="logPackageSession('${p.id}')">Book session</button>` : `<div class="empty">This package has no remaining sessions.</div>`}
+    </div>
+    <div class="detail-section"><div class="section-head"><div><div class="eyebrow">BOOKED SESSIONS</div><h3>Sessions for this package</h3></div></div>${rows}</div>
+  `;
+}
+
+window.openPackage = packageId => {
+  const p = packages.find(x => x.id === packageId);
+  if (!p || remainingForPackage(p) <= 0) return;
+  activePackageId = packageId;
+  showPage("packageDetail");
+};
+
+window.logPackageSession = async packageId => {
+  const msg = $("packageSessionMsg"); if (msg) msg.textContent = "Saving...";
+  const p = packages.find(x => x.id === packageId);
+  if (!p) { if(msg) msg.textContent = "Package not found."; return; }
+  if (remainingForPackage(p) <= 0) { if(msg) msg.textContent = "This package has no remaining sessions."; return; }
+  const dateValue = $("packageSessionDate")?.value, timeValue = $("packageSessionTime")?.value, notesValue = $("packageSessionNotes")?.value.trim() || null;
+  if (!dateValue || !timeValue) { if(msg) msg.textContent = "Please choose a date and time."; return; }
+  const sessionDateTime = new Date(`${dateValue}T${timeValue}:00`);
+  if (Number.isNaN(sessionDateTime.getTime())) { if(msg) msg.textContent = "Please choose a valid date and time."; return; }
+  const clash = sessions.find(s => new Date(s.session_date).getTime() === sessionDateTime.getTime());
+  if (clash) {
+    const clashClient = clients.find(c => c.id === clash.client_id);
+    if(msg) msg.textContent = `That time is already booked with ${clashClient?.name || "another client"}. Please choose another time.`;
+    return;
+  }
+  const { data:{user} } = await sb.auth.getUser();
+  const { error } = await sb.from("sessions").insert({user_id:user.id, client_id:p.client_id, package_id:packageId, session_date:sessionDateTime.toISOString(), notes:notesValue});
+  if(error) { if(msg) msg.textContent = error.message; return; }
+  await load();
+  renderPackageDetail(packageId);
+};
 
 window.detail = id => {
   activeClientId = id;
@@ -953,6 +1031,7 @@ window.deletePackage=async packageId=>{
   const {error}=await sb.from("packages").delete().eq("id",packageId);
   if(error){alert("Could not delete package: "+error.message);return;}
   await load();
+  if (activePackageId === packageId) { activePackageId = null; showPage("clientDetail"); return; }
   if(activeClientId) renderClientDetail(activeClientId);
 };
 
@@ -966,6 +1045,7 @@ window.deleteSession=async (sessionId, clientId)=>{
   const {error}=await sb.from("sessions").delete().eq("id",sessionId);
   if(error){alert("Could not delete session: "+error.message);return;}
   await load();
+  if (activePackageId && packages.some(p => p.id === activePackageId)) { renderPackageDetail(activePackageId); return; }
   if(activeClientId) renderClientDetail(clientId || activeClientId);
 };
 
