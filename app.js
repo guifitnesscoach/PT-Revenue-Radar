@@ -632,6 +632,28 @@ $("resetPasswordForm").onsubmit = async e => {
 
 $("logoutBtn").onclick=()=>sb.auth.signOut();
 
+async function deleteMyAccount(){
+  if(!sb) return;
+  const first = prompt('This will permanently delete your account, clients, prospects, packages, sessions and all related data. This cannot be undone.\n\nType DELETE to confirm.');
+  if(first !== 'DELETE'){
+    if(first !== null) alert('Account deletion cancelled. You must type DELETE exactly to confirm.');
+    return;
+  }
+  const second = confirm('Final confirmation: permanently delete your entire account and all its data?');
+  if(!second) return;
+  try {
+    const { error } = await sb.functions.invoke('delete-account');
+    if(error) throw error;
+    alert('Your account has been permanently deleted.');
+    await sb.auth.signOut();
+    window.location.hash = '';
+    showAuth();
+  } catch(err) {
+    console.error(err);
+    alert('We could not delete your account. Please try again or contact support.\n\n' + (err?.message || 'Unknown error'));
+  }
+}
+
 const PAGE_META = {
   dashboard: { title: "Dashboard" },
   clients: { title: "Clients" },
@@ -669,6 +691,7 @@ document.querySelectorAll(".menu-item").forEach(btn => { btn.onclick = () => sho
 $("menuBtn").onclick = openMenu;
 $("closeMenu").onclick = closeMenu;
 $("menuBackdrop").onclick = closeMenu;
+$("deleteAccountBtn")?.addEventListener("click", deleteMyAccount);
 
 $("calendarPrev").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()-1, 1); renderCalendar(); };
 $("calendarNext").onclick=()=>{ calendarDayKey=null; calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth()+1, 1); renderCalendar(); };
