@@ -1,20 +1,33 @@
-# My Name Tracker v17
+# PT Revenue Radar / My Name Tracker
 
-Changes in v17:
-- Client list cards no longer show phone or email. Contact details and WhatsApp/Email actions are available on the client detail page.
-- Package session list now has an Edit button.
-- Edit session allows changing the date, time and notes of an already booked session.
-- Rescheduling checks the same-time/same-day conflict rule and excludes the session being edited from the conflict check.
-- No Supabase migration is required for these changes.
-- Keep your existing `config.js`; do not replace it with `config.js.example`.
+Current version: v27
 
+## What's included
+- Client and prospect management
+- Prospect contact history
+- Non-contacted vs contacted lead tabs
+- Select individual prospects or Select all
+- Bulk email composer for selected non-contacted prospects
+- Each prospect receives a separate personalised email (no recipient list is exposed)
+- `{{first_name}}`, `{{name}}`, and `{{sender_name}}` placeholders
+- Successful bulk emails are automatically recorded as Email contacts and move the prospect to Contacted leads
+- Existing package/session tracking, dashboard, salary calculator and session calendar
+- Account deletion flow
 
-## v18 fix
-Revenue opportunity is calculated per remaining session using the package total value divided by the package session count. Example: 10-session pack £950 with 7 remaining = £665 revenue opportunity.
+## Important: keep config.js
+Keep your existing `config.js` with your Supabase URL and publishable key. The ZIP only contains `config.js.example` so your real key is not overwritten.
 
+## Bulk email setup
+The bulk-email feature sends through the Supabase Edge Function `send-prospect-emails` and Resend. The Resend API key is never placed in the browser.
 
-## Prospect contact history
-- Email button opens the prospect email directly.
-- Log contact records channel, date/time and notes without overwriting previous contacts.
-- Prospect cards show contact count and latest contact, with expandable history.
-- Contact history is stored in Supabase table `prospect_contacts`.
+1. Create a Resend account and verify the domain/email address you want to use as the sender.
+2. In Supabase Dashboard → Edge Functions → Secrets, add:
+   - `RESEND_API_KEY` = your Resend API key
+   - `RESEND_FROM_EMAIL` = the verified sender email address, for example `hello@yourdomain.com`
+3. The Edge Function is already deployed as `send-prospect-emails`.
+4. In the app, open Prospect Clients → Non-contacted leads → select leads → Send email to selected.
+
+The app sends one email per prospect, with the prospect's first name inserted when `{{first_name}}` is used. Replies are directed to the logged-in account email.
+
+## No database migration required
+The existing `prospect_contacts` table is reused to record successful email sends.

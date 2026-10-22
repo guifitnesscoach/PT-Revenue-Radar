@@ -14,6 +14,7 @@ let activeClientId = null;
 let activePackageId = null;
 let activeProspectId = null;
 let prospectTab = "non_contacted";
+let selectedProspectIds = new Set();
 let activeSessionId = null;
 let clientTab = "active";
 let baseMonthlySalary = 0;
@@ -431,41 +432,61 @@ function contactsForProspect(prospectId) {
 
 function renderProspects() {
   const wrap = $("prospectList");
-  const tabWrap = $("prospectTabs");
   if (!wrap) return;
   const allRows = prospects.filter(p => !p.converted_at);
-  // Use one consistent rule for both tab counts and the rows shown in each tab.
-  const contactedIds = new Set(
-    prospectContacts
-      .filter(c => c && c.prospect_id)
-      .map(c => String(c.prospect_id))
-  );
+  const contactedIds = new Set(prospectContacts.filter(c => c && c.prospect_id).map(c => String(c.prospect_id)));
   const isContacted = p => contactedIds.has(String(p.id)) || !!p.contacted_at;
   const contactedRows = allRows.filter(isContacted);
   const nonContactedRows = allRows.filter(p => !isContacted(p));
-
   $("contactedProspectCount")?.replaceChildren(document.createTextNode(String(contactedRows.length)));
   $("nonContactedProspectCount")?.replaceChildren(document.createTextNode(String(nonContactedRows.length)));
   document.querySelectorAll("[data-prospect-tab]").forEach(btn => btn.classList.toggle("active", btn.dataset.prospectTab === prospectTab));
-
   const rows = prospectTab === "contacted" ? contactedRows : nonContactedRows;
-  if (!rows.length) {
-    wrap.innerHTML = `<div class="empty">${prospectTab === "contacted" ? "No contacted leads yet." : "No non-contacted leads right now."}</div>`;
+  if (prospectTab === "non_contacted") {
+    selectedProspectIds = new Set([...selectedProspectIds].filter(id => nonContactedRows.some(p => String(p.id) === String(id))));
+    const selectedCount = selectedProspectIds.size;
+    wrap.innerHTML = `<div class="bulk-email-toolbar"><div class="bulk-email-select"><label class="check-label"><input type="checkbox" id="selectAllProspects" ${nonContactedRows.length && selectedCount === nonContactedRows.length ? "checked" : ""}> <span>Select all</span></label><span class="bulk-email-count">${selectedCount} selected</span></div><button id="bulkEmailBtn" class="primary small" type="button" ${selectedCount ? "" : "disabled"}>Send email to selected${selectedCount ? ` (${selectedCount})` : ""}</button></div>` + (rows.length ? rows.map(renderProspectRow).join("") : `<div class="empty">No non-contacted leads right now.</div>`);
+    $("selectAllProspects")?.addEventListener("change", e => {
+      if (e.target.checked) nonContactedRows.forEach(p => selectedProspectIds.add(String(p.id))); else selectedProspectIds.clear();
+      renderProspects();
+    });
+    $("bulkEmailBtn")?.addEventListener("click", openBulkProspectEmail);
     return;
   }
-  wrap.innerHTML = rows.map(pr => {
-    const history = contactsForProspect(pr.id);
-    const latest = history[0];
-    const contacted = history.length > 0 || !!pr.contacted_at;
-    const when = latest ? new Date(latest.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : (pr.contacted_at ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet");
-    const channel = latest?.channel || "Previous contact";
-    return `<div class="prospect-row">
-      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
-      <div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="editProspect('${pr.id}')">Edit</button><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
-      ${history.length ? `<details class="prospect-history"><summary>Contact history (${history.length})</summary><div class="history-list">${history.map(h => `<div class="history-item"><div><b>${esc(h.channel)}</b> · ${esc(new Date(h.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}))}</div>${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}</div>`).join("")}</div></details>` : ""}
-    </div>`;
-  }).join("");
+  if (!rows.length) { wrap.innerHTML = `<div class="empty">No contacted leads yet.</div>`; return; }
+  wrap.innerHTML = rows.map(renderProspectRow).join("");
 }
+
+function renderProspectRow(pr) {
+  const history = contactsForProspect(pr.id);
+  const latest = history[0];
+  const contacted = history.length > 0 || !!pr.contacted_at;
+  const when = latest ? new Date(latest.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : (pr.contacted_at ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet");
+  const channel = latest?.channel || "Previous contact";
+  const selected = selectedProspectIds.has(String(pr.id));
+  return `<div class="prospect-row ${selected ? "prospect-row-selected" : ""}">${!contacted ? `<div class="prospect-select"><input type="checkbox" aria-label="Select ${esc(pr.name)}" ${selected ? "checked" : ""} onchange="toggleProspectSelection('${pr.id}', this.checked)"></div>` : ""}<div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div><div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="editProspect('${pr.id}')">Edit</button><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>${history.length ? `<details class="prospect-history"><summary>Contact history (${history.length})</summary><div class="history-list">${history.map(h => `<div class="history-item"><div><b>${esc(h.channel)}</b> · ${esc(new Date(h.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}))}</div>${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}</div>`).join("")}</div></details>` : ""}</div>`;
+}
+
+window.toggleProspectSelection = (id, checked) => {
+  const key = String(id);
+  if (checked) selectedProspectIds.add(key); else selectedProspectIds.delete(key);
+  renderProspects();
+};
+
+const defaultProspectEmailSubject = "A complimentary PT session for you";
+const defaultProspectEmailBody = `Hi {{first_name}},\n\nI’m a Personal Trainer and I wanted to reach out to see how your fitness journey is going.\n\nIf there’s anything you’d like help with — your training, goals, technique, or simply getting started — I’d be happy to help.\n\nI’m currently offering a complimentary PT session, so if you’d like to take advantage of it, just reply to this email and I’ll be happy to arrange it.\n\nBest,\n{{sender_name}}`;
+
+window.openBulkProspectEmail = async () => {
+  const ids = [...selectedProspectIds];
+  if (!ids.length) return;
+  const { data: { user } } = await sb.auth.getUser();
+  const senderName = user?.user_metadata?.full_name?.trim() || "Personal Trainer";
+  $("bulkEmailSelectedCount").textContent = `${ids.length} prospect${ids.length === 1 ? "" : "s"} selected`;
+  $("bulkEmailSubject").value = defaultProspectEmailSubject;
+  $("bulkEmailBody").value = defaultProspectEmailBody.replaceAll("{{sender_name}}", senderName);
+  $("bulkEmailMsg").textContent = "";
+  $("bulkEmailDialog").showModal();
+};
 
 function card(c, x) {
   return `<div class="client">
@@ -706,8 +727,42 @@ $("closeProspectDialog")?.addEventListener("click", () => $("prospectDialog").cl
 $("exportProspectsBtn")?.addEventListener("click", exportProspectsCsv);
 $("importProspectsBtn")?.addEventListener("click", () => $("prospectImportFile")?.click());
 $("prospectImportFile")?.addEventListener("change", handleProspectImport);
-document.querySelectorAll("[data-prospect-tab]").forEach(btn => btn.addEventListener("click", () => { prospectTab = btn.dataset.prospectTab; renderProspects(); }));
+document.querySelectorAll("[data-prospect-tab]").forEach(btn => btn.addEventListener("click", () => { prospectTab = btn.dataset.prospectTab; if (prospectTab !== "non_contacted") selectedProspectIds.clear(); renderProspects(); }));
 $("closeEditProspectDialog")?.addEventListener("click", () => { activeProspectId = null; $("editProspectDialog")?.close(); });
+$("closeBulkEmailDialog")?.addEventListener("click", () => $("bulkEmailDialog")?.close());
+$("bulkEmailForm")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  const ids = [...selectedProspectIds];
+  if (!ids.length) return;
+  const msg = $("bulkEmailMsg");
+  const btn = $("bulkEmailSendBtn");
+  const subject = $("bulkEmailSubject").value.trim();
+  const body = $("bulkEmailBody").value.trim();
+  if (!subject || !body) { msg.textContent = "Subject and message are required."; return; }
+  btn.disabled = true;
+  btn.textContent = "Sending...";
+  msg.textContent = `Sending ${ids.length} individual email${ids.length === 1 ? "" : "s"}...`;
+  try {
+    const { data: { user } } = await sb.auth.getUser();
+    const fromName = user?.user_metadata?.full_name?.trim() || "Personal Trainer";
+    const { data, error } = await sb.functions.invoke("send-prospect-emails", { body: { prospectIds: ids, subject, body, fromName } });
+    if (error) throw error;
+    $("bulkEmailDialog").close();
+    selectedProspectIds.clear();
+    await load();
+    showPage("prospects");
+    const sent = Number(data?.sent || 0), failed = Number(data?.failed || 0);
+    if (failed) alert(`${sent} email${sent === 1 ? "" : "s"} sent successfully. ${failed} could not be sent; those leads remain in Non-contacted.`);
+    else alert(`${sent} individual email${sent === 1 ? "" : "s"} sent successfully.`);
+  } catch (err) {
+    console.error(err);
+    msg.textContent = err?.message || "Could not send the emails.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send emails";
+  }
+});
+
 
 $("clientForm").onsubmit=async e=>{
   e.preventDefault();
@@ -729,7 +784,7 @@ $("clientForm").onsubmit=async e=>{
 $("prospectForm").onsubmit=async e=>{
   e.preventDefault();
   const {data:{user}}=await sb.auth.getUser();
-  const payload={user_id:user.id,name:$("prName").value.trim(),email:$("prEmail").value.trim(),phone:$("prPhone").value.trim()||null,source:null,notes:$("prNotes").value.trim()||null};
+  const payload={user_id:user.id,name:$("prName").value.trim(),email:$("prEmail").value.trim(),phone:$("prPhone").value.trim()||null,notes:$("prNotes").value.trim()||null};
   const {error}=await sb.from("prospects").insert(payload);
   if(error){$("prospectMsg").textContent=error.message;return;}
   $("prospectDialog").close(); await load(); showPage("prospects");
@@ -765,7 +820,7 @@ async function handleProspectImport(e){
       const email=row.email.toLowerCase();
       if(seen.has(email)) continue;
       seen.add(email);
-      unique.push({user_id:user.id,name:row.name,email:row.email,phone:row.phone||null,source:null,notes:row.notes||null});
+      unique.push({user_id:user.id,name:row.name,email:row.email,phone:row.phone||null,notes:row.notes||null});
     }
     if(!unique.length){
       alert("No new prospects were imported. All emails already exist in your prospect list.");
@@ -954,7 +1009,7 @@ $("prospectPackageForm").onsubmit=async e=>{
   const p=prospects.find(x=>x.id===activeProspectId); if(!p)return;
   const opt=$("prPackage").selectedOptions[0]; if(!opt)return;
   const {data:{user}}=await sb.auth.getUser();
-  const {data:client,error:clientError}=await sb.from("clients").insert({user_id:user.id,name:p.name,email:p.email,phone:p.phone||null,lead_source:null,lead:true,notes:p.notes||null}).select().single();
+  const {data:client,error:clientError}=await sb.from("clients").insert({user_id:user.id,name:p.name,email:p.email,phone:p.phone||null,lead:true,notes:p.notes||null}).select().single();
   if(clientError){$("prospectPackageMsg").textContent=clientError.message;return;}
   const {error:packageError}=await sb.from("packages").insert({user_id:user.id,client_id:client.id,package:$("prPackage").value,package_sessions:Number(opt.dataset.sessions||0),package_value:packagePrice($("prPackage").value),monthly:opt.dataset.monthly==="true",purchased_at:new Date($("prPackagePurchasedAt").value+"T12:00:00").toISOString()});
   if(packageError){await sb.from("clients").delete().eq("id",client.id);$("prospectPackageMsg").textContent=packageError.message;return;}
