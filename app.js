@@ -13,6 +13,7 @@ let prospectContacts = [];
 let activeClientId = null;
 let activePackageId = null;
 let activeProspectId = null;
+let prospectTab = "non_contacted";
 let activeSessionId = null;
 let clientTab = "active";
 let baseMonthlySalary = 0;
@@ -430,10 +431,19 @@ function contactsForProspect(prospectId) {
 
 function renderProspects() {
   const wrap = $("prospectList");
+  const tabWrap = $("prospectTabs");
   if (!wrap) return;
-  const rows = prospects.filter(p => !p.converted_at);
+  const allRows = prospects.filter(p => !p.converted_at);
+  const contactedRows = allRows.filter(p => contactsForProspect(p.id).length > 0 || !!p.contacted_at);
+  const nonContactedRows = allRows.filter(p => !(contactsForProspect(p.id).length > 0 || !!p.contacted_at));
+
+  $("contactedProspectCount")?.replaceChildren(document.createTextNode(String(contactedRows.length)));
+  $("nonContactedProspectCount")?.replaceChildren(document.createTextNode(String(nonContactedRows.length)));
+  document.querySelectorAll("[data-prospect-tab]").forEach(btn => btn.classList.toggle("active", btn.dataset.prospectTab === prospectTab));
+
+  const rows = prospectTab === "contacted" ? contactedRows : nonContactedRows;
   if (!rows.length) {
-    wrap.innerHTML = `<div class="empty">No prospect clients yet. Add your first lead from your Fitness Manager.</div>`;
+    wrap.innerHTML = `<div class="empty">${prospectTab === "contacted" ? "No contacted leads yet." : "No non-contacted leads right now."}</div>`;
     return;
   }
   wrap.innerHTML = rows.map(pr => {
@@ -444,7 +454,7 @@ function renderProspects() {
     const channel = latest?.channel || "Previous contact";
     return `<div class="prospect-row">
       <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""} · ${esc(pr.source || "Fitness Manager")}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
-      <div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
+      <div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="editProspect('${pr.id}')">Edit</button><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
       ${history.length ? `<details class="prospect-history"><summary>Contact history (${history.length})</summary><div class="history-list">${history.map(h => `<div class="history-item"><div><b>${esc(h.channel)}</b> · ${esc(new Date(h.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}))}</div>${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}</div>`).join("")}</div></details>` : ""}
     </div>`;
   }).join("");
@@ -666,6 +676,8 @@ $("closeProspectDialog")?.addEventListener("click", () => $("prospectDialog").cl
 $("exportProspectsBtn")?.addEventListener("click", exportProspectsCsv);
 $("importProspectsBtn")?.addEventListener("click", () => $("prospectImportFile")?.click());
 $("prospectImportFile")?.addEventListener("change", handleProspectImport);
+document.querySelectorAll("[data-prospect-tab]").forEach(btn => btn.addEventListener("click", () => { prospectTab = btn.dataset.prospectTab; renderProspects(); }));
+$("closeEditProspectDialog")?.addEventListener("click", () => { activeProspectId = null; $("editProspectDialog")?.close(); });
 
 $("clientForm").onsubmit=async e=>{
   e.preventDefault();
@@ -792,6 +804,42 @@ function exportProspectsCsv(){
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`prospect-clients-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
+
+window.editProspect = id => {
+  const p = prospects.find(x => x.id === id);
+  if (!p) return;
+  activeProspectId = id;
+  $("editProspectTitle").textContent = p.name || "Prospect";
+  $("editProspectForm").reset();
+  $("editProspectName").value = p.name || "";
+  $("editProspectEmail").value = p.email || "";
+  $("editProspectPhone").value = p.phone || "";
+  $("editProspectNotes").value = p.notes || "";
+  $("editProspectMsg").textContent = "";
+  $("editProspectDialog").showModal();
+};
+
+$("editProspectForm")?.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!activeProspectId) return;
+  const msg = $("editProspectMsg");
+  const name = $("editProspectName").value.trim();
+  const email = $("editProspectEmail").value.trim();
+  if (!name || !email) { msg.textContent = "Name and email are required."; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = "Please enter a valid email address."; return; }
+  msg.textContent = "Saving...";
+  const {error} = await sb.from("prospects").update({
+    name,
+    email,
+    phone: $("editProspectPhone").value.trim() || null,
+    notes: $("editProspectNotes").value.trim() || null
+  }).eq("id", activeProspectId);
+  if (error) { msg.textContent = error.message; return; }
+  $("editProspectDialog").close();
+  activeProspectId = null;
+  await load();
+  showPage("prospects");
+});
 
 window.openProspectContact = id => {
   const p = prospects.find(x => x.id === id);

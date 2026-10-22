@@ -171,3 +171,5 @@
 @media(max-width:700px){.package-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .link-button{display:block;width:100%;border:0;background:none;padding:10px 0;color:#111827;font-weight:800;text-decoration:underline;cursor:pointer}.link-button:hover{opacity:.75}
+
+.prospect-tabs{margin-top:12px}.prospect-tabs .client-tab{white-space:nowrap}.prospect-actions{flex-wrap:wrap}.prospect-actions .danger{color:#b42318;border-color:#f3c5c0}
