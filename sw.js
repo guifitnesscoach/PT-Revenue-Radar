@@ -1,4 +1,4 @@
-const CACHE = "ptrr-saas-v13";
+const CACHE = "ptrr-saas-v14";
 
 self.addEventListener("install", event => {
   self.skipWaiting();
