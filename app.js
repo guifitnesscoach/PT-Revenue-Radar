@@ -378,7 +378,7 @@ function render() {
       ["CLIENTS", clients.length],
       ["AT RISK", risk.length],
       ["FOLLOW-UPS", analysed.filter(x => x.x.score > 0).length],
-      ["REMAINING SESSIONS", totalRemainingSessions],
+      ["SESSIONS TO BE BOOKED", totalRemainingSessions],
       ["REVENUE OPPORTUNITY", money(opportunity)]
     ].map(x => `<div class="stat"><div class="l">${x[0]}</div><div class="v">${x[1]}</div></div>`).join("");
   }
