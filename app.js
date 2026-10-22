@@ -434,8 +434,15 @@ function renderProspects() {
   const tabWrap = $("prospectTabs");
   if (!wrap) return;
   const allRows = prospects.filter(p => !p.converted_at);
-  const contactedRows = allRows.filter(p => contactsForProspect(p.id).length > 0 || !!p.contacted_at);
-  const nonContactedRows = allRows.filter(p => !(contactsForProspect(p.id).length > 0 || !!p.contacted_at));
+  // Use one consistent rule for both tab counts and the rows shown in each tab.
+  const contactedIds = new Set(
+    prospectContacts
+      .filter(c => c && c.prospect_id)
+      .map(c => String(c.prospect_id))
+  );
+  const isContacted = p => contactedIds.has(String(p.id)) || !!p.contacted_at;
+  const contactedRows = allRows.filter(isContacted);
+  const nonContactedRows = allRows.filter(p => !isContacted(p));
 
   $("contactedProspectCount")?.replaceChildren(document.createTextNode(String(contactedRows.length)));
   $("nonContactedProspectCount")?.replaceChildren(document.createTextNode(String(nonContactedRows.length)));
@@ -887,6 +894,8 @@ $("prospectContactForm")?.addEventListener("submit", async e => {
   $("prospectContactDialog").close();
   activeProspectId = null;
   await load();
+  // A successful contact should immediately move the prospect to Contacted leads.
+  prospectTab = "contacted";
   showPage("prospects");
 });
 
