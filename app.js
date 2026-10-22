@@ -460,7 +460,7 @@ function renderProspects() {
     const when = latest ? new Date(latest.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : (pr.contacted_at ? new Date(pr.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}) : "Not contacted yet");
     const channel = latest?.channel || "Previous contact";
     return `<div class="prospect-row">
-      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""} · ${esc(pr.source || "Fitness Manager")}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
+      <div class="prospect-main"><div class="name">${esc(pr.name)}</div><div class="meta">${esc(pr.email)}${pr.phone ? ` · ${esc(pr.phone)}` : ""}</div><div class="meta">${contacted ? `${history.length || 1} contact${(history.length || 1) === 1 ? "" : "s"} · Last: ${esc(channel)} · ${esc(when)}` : "Not contacted yet"}</div>${pr.notes ? `<div class="why">${esc(pr.notes)}</div>` : ""}</div>
       <div class="actions prospect-actions"><a class="ghost small" href="mailto:${encodeURIComponent(pr.email)}?subject=${encodeURIComponent("PT follow-up")}&body=${encodeURIComponent("Hi " + ((pr.name || "").trim().split(/\s+/)[0] || "there") + "\n\nI hope you\\'re well.\n\nThank you\nGui")}">Email</a><button class="ghost small" onclick="editProspect('${pr.id}')">Edit</button><button class="ghost small" onclick="openProspectContact('${pr.id}')">${contacted ? "Log contact" : "Mark contacted"}</button><button class="primary small" onclick="convertProspect('${pr.id}')">Add package & convert</button><button class="ghost small danger" onclick="deleteProspect('${pr.id}')">Delete</button></div>
       ${history.length ? `<details class="prospect-history"><summary>Contact history (${history.length})</summary><div class="history-list">${history.map(h => `<div class="history-item"><div><b>${esc(h.channel)}</b> · ${esc(new Date(h.contacted_at).toLocaleString("en-GB", {dateStyle:"medium", timeStyle:"short"}))}</div>${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}</div>`).join("")}</div></details>` : ""}
     </div>`;
@@ -706,7 +706,7 @@ $("clientForm").onsubmit=async e=>{
 $("prospectForm").onsubmit=async e=>{
   e.preventDefault();
   const {data:{user}}=await sb.auth.getUser();
-  const payload={user_id:user.id,name:$("prName").value.trim(),email:$("prEmail").value.trim(),phone:$("prPhone").value.trim()||null,source:"Fitness Manager",notes:$("prNotes").value.trim()||null};
+  const payload={user_id:user.id,name:$("prName").value.trim(),email:$("prEmail").value.trim(),phone:$("prPhone").value.trim()||null,source:null,notes:$("prNotes").value.trim()||null};
   const {error}=await sb.from("prospects").insert(payload);
   if(error){$("prospectMsg").textContent=error.message;return;}
   $("prospectDialog").close(); await load(); showPage("prospects");
@@ -742,7 +742,7 @@ async function handleProspectImport(e){
       const email=row.email.toLowerCase();
       if(seen.has(email)) continue;
       seen.add(email);
-      unique.push({user_id:user.id,name:row.name,email:row.email,phone:row.phone||null,source:"Fitness Manager",notes:row.notes||null});
+      unique.push({user_id:user.id,name:row.name,email:row.email,phone:row.phone||null,source:null,notes:row.notes||null});
     }
     if(!unique.length){
       alert("No new prospects were imported. All emails already exist in your prospect list.");
@@ -802,11 +802,11 @@ function parseCsv(text){
 
 function exportProspectsCsv(){
   const rows=prospects.filter(p=>!p.converted_at);
-  const header=["Name","Email","Phone","Source","Contact Count","Last Contact Channel","Last Contacted At"];
+  const header=["Name","Email","Phone","Contact Count","Last Contact Channel","Last Contacted At"];
   const csv=[header,...rows.map(p=>{
     const history=contactsForProspect(p.id);
     const latest=history[0];
-    return [p.name,p.email,p.phone||"",p.source||"Fitness Manager",history.length,latest?.channel||"",latest?.contacted_at?new Date(latest.contacted_at).toLocaleString("en-GB"):(p.contacted_at?new Date(p.contacted_at).toLocaleString("en-GB"):"")];
+    return [p.name,p.email,p.phone||"",history.length,latest?.channel||"",latest?.contacted_at?new Date(latest.contacted_at).toLocaleString("en-GB"):(p.contacted_at?new Date(p.contacted_at).toLocaleString("en-GB"):"")];
   })].map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`prospect-clients-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
@@ -931,7 +931,7 @@ $("prospectPackageForm").onsubmit=async e=>{
   const p=prospects.find(x=>x.id===activeProspectId); if(!p)return;
   const opt=$("prPackage").selectedOptions[0]; if(!opt)return;
   const {data:{user}}=await sb.auth.getUser();
-  const {data:client,error:clientError}=await sb.from("clients").insert({user_id:user.id,name:p.name,email:p.email,phone:p.phone||null,lead_source:"Fitness Manager",lead:true,notes:p.notes||null}).select().single();
+  const {data:client,error:clientError}=await sb.from("clients").insert({user_id:user.id,name:p.name,email:p.email,phone:p.phone||null,lead_source:null,lead:true,notes:p.notes||null}).select().single();
   if(clientError){$("prospectPackageMsg").textContent=clientError.message;return;}
   const {error:packageError}=await sb.from("packages").insert({user_id:user.id,client_id:client.id,package:$("prPackage").value,package_sessions:Number(opt.dataset.sessions||0),package_value:packagePrice($("prPackage").value),monthly:opt.dataset.monthly==="true",purchased_at:new Date($("prPackagePurchasedAt").value+"T12:00:00").toISOString()});
   if(packageError){await sb.from("clients").delete().eq("id",client.id);$("prospectPackageMsg").textContent=packageError.message;return;}
